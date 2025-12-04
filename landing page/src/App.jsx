@@ -1,10 +1,15 @@
 import React from 'react';
-import './App.css';
+
 import './TeamFooter.css';
 import './HowItWorksBenefits.css';
+import './Features.css'; 
+import './NavigationHero.css';  
+import './App.css';
 
 import HowItWorksBenefits from './HowItWorksBenefits'; 
-import TeamFooter from './TeamFooter';             
+import TeamFooter from './TeamFooter';         
+import Features from './Features'; 
+import NavigationHero from './NavigationHero';     
 
 
 const App = () => {
@@ -18,7 +23,6 @@ const App = () => {
       <HowItWorksBenefits />
       
       <Features />
-      
   
       <TeamFooter />
       

@@ -29,7 +29,7 @@ const NavigationHero = () => {
       
       <nav className={`navbar ${scrolled ? 'scrolled' : ''}`}>
         {/* Container keeps content centered with max width */}
-        <div className="container">
+        <div className="nav-container">
           <div className="nav-content">
             
             {/* Logo */}
