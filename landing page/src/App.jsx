@@ -13,10 +13,13 @@ const App = () => {
   
   return (
     <div className="app">
-      
+      <NavigationHero />
+
       <HowItWorksBenefits />
       
-     
+      <Features />
+      
+  
       <TeamFooter />
       
     </div>
