@@ -1,5 +1,6 @@
 import React from 'react';
 import './TeamFooter.css';
+import { FaInstagram } from 'react-icons/fa';
 
 const TeamFooter = () => {
   
@@ -114,19 +115,16 @@ const TeamFooter = () => {
             {/* Contact and social */}
             <div className="footer-contact">
               <h4>Connect With Us</h4>
-              <p>Informatics Institute of Technology</p>
-              <p>Sri Lanka</p>
               
               {/* Social Media Links */}
               <div className="social-links">
-                {/* Instagram link as requested */}
                 <a 
                   href="https://instagram.com/confusense" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   aria-label="Instagram"
                 >
-                  📷 Instagram
+                  <FaInstagram /> Instagram
                 </a>
               </div>
             </div>
