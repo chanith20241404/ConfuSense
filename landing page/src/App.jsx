@@ -1,34 +1,42 @@
 import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
-import './TeamFooter.css';
-import './HowItWorksBenefits.css';
-import './Features.css'; 
-import './NavigationHero.css';  
 import './App.css';
+import './NavigationHero.css';
+import './Features.css'; 
+import './HowItWorksBenefits.css';
+import './TeamFooter.css';
 
-import HowItWorksBenefits from './HowItWorksBenefits'; 
-import TeamFooter from './TeamFooter';         
-import Features from './Features'; 
 import NavigationHero from './NavigationHero';     
+import Features from './Features';                 
+import HowItWorksBenefits from './HowItWorksBenefits'; 
+import TeamFooter from './TeamFooter';
+import Pricing from './Pricing';
 
-
-const App = () => {
-  
-
-  
+// Home page component
+const HomePage = () => {
   return (
-    <div className="app">
+    <>
       <NavigationHero />
-
-      <HowItWorksBenefits />
-      
       <Features />
-  
+      <HowItWorksBenefits />
       <TeamFooter />
-      
-    </div>
+    </>
   );
 };
 
+// Main App component with routing
+const App = () => {
+  return (
+    <Router>
+      <div className="app">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/pricing" element={<Pricing />} />
+        </Routes>
+      </div>
+    </Router>
+  );
+};
 
 export default App;
