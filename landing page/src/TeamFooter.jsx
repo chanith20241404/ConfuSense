@@ -112,22 +112,7 @@ const TeamFooter = () => {
               <a href="#team">Team</a>
             </div>
             
-            {/* Contact and social */}
-            <div className="footer-contact">
-              <h4>Connect With Us</h4>
-              
-              {/* Social Media Links */}
-              <div className="social-links">
-                <a 
-                  href="https://instagram.com/confusense" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  aria-label="Instagram"
-                >
-                  <FaInstagram /> Instagram
-                </a>
-              </div>
-            </div>
+          
           </div>
           
           {/* Copyright bar */}
