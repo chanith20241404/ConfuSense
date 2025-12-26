@@ -43,3 +43,48 @@ active_rooms = {}
 
 
 def get_db():
+    if 'db' not in g:
+        g.db = sqlite3.connect(DATABASE_PATH)
+        g.db.row_factory = sqlite3.Row
+    return g.db
+
+
+@app.teardown_appcontext
+def close_db(exception):
+    db = g.pop('db', None)
+    if db is not None:
+        db.close()
+
+
+def init_db():
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sessions (
+            id TEXT PRIMARY KEY,
+            meeting_id TEXT,
+            host_name TEXT,
+            start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_active INTEGER DEFAULT 1
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS participant_status (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            meeting_id TEXT,
+            session_id TEXT,
+            participant_id TEXT,
+            participant_name TEXT,
+            detection_enabled INTEGER DEFAULT 1,
+            last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(meeting_id, participant_id)
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS confusion_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            meeting_id TEXT,
+            participant_id TEXT,
