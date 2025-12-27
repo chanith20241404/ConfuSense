@@ -88,3 +88,48 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             meeting_id TEXT,
             participant_id TEXT,
+            participant_name TEXT,
+            confusion_rate REAL,
+            confirmed INTEGER DEFAULT 0,
+            intervention_by TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_ps_meeting ON participant_status(meeting_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_meeting ON sessions(meeting_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_ce_meeting ON confusion_events(meeting_id)')
+
+    conn.commit()
+    conn.close()
+    logger.info(f"Database initialized: {DATABASE_PATH}")
+
+
+init_db()
+
+
+# ==================== REST API ====================
+
+@app.route('/')
+def index():
+    return jsonify({
+        'name': 'ConfuSense API',
+        'version': '4.0.0',
+        'websocket': True,
+        'rest_fallback': False
+    })
+
+
+@app.route('/api/health')
+def health():
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.utcnow().isoformat(),
+        'websocket': True
+    })
+
+
+@app.route('/api/sessions', methods=['POST'])
+def create_session():
+    data = request.json or {}
+
