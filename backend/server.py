@@ -133,3 +133,48 @@ def health():
 def create_session():
     data = request.json or {}
 
+    session_id = data.get('session_id') or str(uuid.uuid4())[:8]
+    meeting_id = data.get('meeting_id', '')
+    host_name = data.get('host_name', 'Unknown')
+
+    db = get_db()
+    cursor = db.cursor()
+
+    cursor.execute('SELECT id FROM sessions WHERE meeting_id = ? AND is_active = 1', (meeting_id,))
+    existing = cursor.fetchone()
+
+    if existing:
+        return jsonify({'success': True, 'session_id': existing['id'], 'meeting_id': meeting_id, 'existing': True})
+
+    cursor.execute('INSERT INTO sessions (id, meeting_id, host_name) VALUES (?, ?, ?)',
+                   (session_id, meeting_id, host_name))
+    db.commit()
+
+    if meeting_id not in active_rooms:
+        active_rooms[meeting_id] = {}
+
+    logger.info(f"Session created: {session_id}")
+    return jsonify({'success': True, 'session_id': session_id, 'meeting_id': meeting_id})
+
+
+@app.route('/api/sessions/by-meeting/<meeting_id>')
+def get_session_by_meeting(meeting_id):
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('SELECT * FROM sessions WHERE meeting_id = ? AND is_active = 1 ORDER BY start_time DESC LIMIT 1',
+                   (meeting_id,))
+    session = cursor.fetchone()
+
+    if not session:
+        return jsonify({'error': 'No session found'}), 404
+
+    return jsonify({'success': True, 'session_id': session['id'], 'meeting_id': meeting_id})
+
+
+# ==================== WEBSOCKET EVENTS ====================
+
+@socketio.on('connect')
+def handle_connect():
+    logger.info(f"WS connected: {request.sid}")
+    emit('connected', {'status': 'connected', 'sid': request.sid})
+
