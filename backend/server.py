@@ -178,3 +178,48 @@ def handle_connect():
     logger.info(f"WS connected: {request.sid}")
     emit('connected', {'status': 'connected', 'sid': request.sid})
 
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    logger.info(f"WS disconnected: {request.sid}")
+
+    for meeting_id, participants in list(active_rooms.items()):
+        for pid, pdata in list(participants.items()):
+            if pdata.get('sid') == request.sid:
+                del active_rooms[meeting_id][pid]
+                emit('participant_left', {
+                    'participant_id': pid,
+                    'participant_name': pdata.get('name', 'Unknown')
+                }, room=meeting_id)
+
+
+@socketio.on('join_meeting')
+def handle_join_meeting(data):
+    meeting_id = data.get('meeting_id')
+    participant_id = data.get('participant_id')
+    participant_name = data.get('participant_name', 'Unknown')
+    role = data.get('role', 'student')
+    detection_enabled = data.get('detection_enabled', True)
+
+    if not meeting_id:
+        emit('error', {'message': 'meeting_id required'})
+        return
+
+    if not participant_name or participant_name == 'Unknown':
+        logger.warning(f"Rejecting join — name not resolved yet (pid={participant_id})")
+        emit('error', {'message': 'name_not_resolved'})
+        return
+
+    join_room(meeting_id)
+    logger.info(f"{participant_name} ({role}) joined {meeting_id}")
+
+    if meeting_id not in active_rooms:
+        active_rooms[meeting_id] = {}
+
+    active_rooms[meeting_id][participant_id] = {
+        'sid': request.sid,
+        'name': participant_name,
+        'role': role,
+        'detection_enabled': detection_enabled
+    }
+
