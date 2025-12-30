@@ -223,3 +223,48 @@ def handle_join_meeting(data):
         'detection_enabled': detection_enabled
     }
 
+    # Broadcast to room
+    emit('participant_joined', {
+        'participant_id': participant_id,
+        'participant_name': participant_name,
+        'role': role,
+        'detection_enabled': detection_enabled
+    }, room=meeting_id)
+
+    # Send participant list to joiner
+    participants_list = [
+        {
+            'participant_id': pid,
+            'participant_name': pdata['name'],
+            'role': pdata.get('role', 'student'),
+            'detection_enabled': pdata.get('detection_enabled', True)
+        }
+        for pid, pdata in active_rooms[meeting_id].items()
+    ]
+    emit('participants_list', {'meeting_id': meeting_id, 'participants': participants_list})
+
+    # Save to DB
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO participant_status (meeting_id, participant_id, participant_name, detection_enabled, last_update)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(meeting_id, participant_id) DO UPDATE SET last_update = CURRENT_TIMESTAMP
+        ''', (meeting_id, participant_id, participant_name, 1 if detection_enabled else 0))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"DB error on join: {e}")
+
+
+@socketio.on('leave_meeting')
+def handle_leave_meeting(data):
+    meeting_id = data.get('meeting_id')
+    participant_id = data.get('participant_id')
+    participant_name = data.get('participant_name', 'Unknown')
+
+    if meeting_id and meeting_id in active_rooms:
+        if participant_id in active_rooms[meeting_id]:
+            del active_rooms[meeting_id][participant_id]
+
