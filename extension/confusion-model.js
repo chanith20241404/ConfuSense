@@ -73,3 +73,48 @@ class HeuristicAnalyzer {
       faceDetected: faceData !== null,
       confusionScore: 0,
       indicators: {}
+    };
+
+    if (!faceData) {
+      analysis.indicators.noFace = true;
+      analysis.confusionScore = 40;
+      this.updateHistory(analysis);
+      return analysis;
+    }
+
+    let score = 0;
+
+    if (faceData.topLeft && faceData.bottomRight) {
+      const faceCenter = {
+        x: (faceData.topLeft[0] + faceData.bottomRight[0]) / 2,
+        y: (faceData.topLeft[1] + faceData.bottomRight[1]) / 2
+      };
+      
+      const frameWidth = features.frameWidth || 640;
+      const centerOffset = Math.abs(faceCenter.x - frameWidth / 2) / frameWidth;
+      
+      if (centerOffset > 0.3) {
+        score += 20;
+        analysis.indicators.lookingAway = true;
+      }
+    }
+
+    if (faceData.landmarks && faceData.landmarks.length >= 6) {
+      const leftEye = faceData.landmarks[0];
+      const rightEye = faceData.landmarks[1];
+      
+      if (leftEye && rightEye) {
+        const eyeTilt = Math.abs(leftEye[1] - rightEye[1]);
+        if (eyeTilt > 10) {
+          score += 15;
+          analysis.indicators.headTilt = true;
+        }
+      }
+    }
+
+    if (features.brightness !== undefined && features.brightness < 0.3) {
+      score += 10;
+      analysis.indicators.lowBrightness = true;
+    }
+
+    if (features.symmetry !== undefined && features.symmetry < 0.6) {
