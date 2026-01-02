@@ -268,3 +268,48 @@ def handle_leave_meeting(data):
         if participant_id in active_rooms[meeting_id]:
             del active_rooms[meeting_id][participant_id]
 
+    leave_room(meeting_id)
+    emit('participant_left', {
+        'participant_id': participant_id,
+        'participant_name': participant_name
+    }, room=meeting_id)
+
+    logger.info(f"{participant_name} left {meeting_id}")
+
+
+@socketio.on('participant_status_update')
+def handle_status_update(data):
+    meeting_id = data.get('meeting_id')
+    participant_id = data.get('participant_id')
+    participant_name = data.get('participant_name', 'Unknown')
+    detection_enabled = data.get('detection_enabled', True)
+
+    if not participant_name or participant_name == 'Unknown':
+        logger.warning(f"Rejecting status update — name not resolved (pid={participant_id})")
+        return
+
+    logger.info(f"*** WS STATUS: {participant_name} -> {detection_enabled} ***")
+
+    if meeting_id in active_rooms and participant_id in active_rooms[meeting_id]:
+        active_rooms[meeting_id][participant_id]['detection_enabled'] = detection_enabled
+
+    emit('participant_status_changed', {
+        'participant_id': participant_id,
+        'participant_name': participant_name,
+        'detection_enabled': detection_enabled,
+        'timestamp': datetime.utcnow().isoformat()
+    }, room=meeting_id, include_self=False)
+
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO participant_status (meeting_id, participant_id, participant_name, detection_enabled, last_update)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(meeting_id, participant_id)
+            DO UPDATE SET detection_enabled = excluded.detection_enabled, last_update = CURRENT_TIMESTAMP
+        ''', (meeting_id, participant_id, participant_name, 1 if detection_enabled else 0))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"DB error: {e}")
