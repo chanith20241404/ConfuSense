@@ -268,3 +268,93 @@ def handle_leave_meeting(data):
         if participant_id in active_rooms[meeting_id]:
             del active_rooms[meeting_id][participant_id]
 
+    leave_room(meeting_id)
+    emit('participant_left', {
+        'participant_id': participant_id,
+        'participant_name': participant_name
+    }, room=meeting_id)
+
+    logger.info(f"{participant_name} left {meeting_id}")
+
+
+@socketio.on('participant_status_update')
+def handle_status_update(data):
+    meeting_id = data.get('meeting_id')
+    participant_id = data.get('participant_id')
+    participant_name = data.get('participant_name', 'Unknown')
+    detection_enabled = data.get('detection_enabled', True)
+
+    if not participant_name or participant_name == 'Unknown':
+        logger.warning(f"Rejecting status update — name not resolved (pid={participant_id})")
+        return
+
+    logger.info(f"*** WS STATUS: {participant_name} -> {detection_enabled} ***")
+
+    if meeting_id in active_rooms and participant_id in active_rooms[meeting_id]:
+        active_rooms[meeting_id][participant_id]['detection_enabled'] = detection_enabled
+
+    emit('participant_status_changed', {
+        'participant_id': participant_id,
+        'participant_name': participant_name,
+        'detection_enabled': detection_enabled,
+        'timestamp': datetime.utcnow().isoformat()
+    }, room=meeting_id, include_self=False)
+
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO participant_status (meeting_id, participant_id, participant_name, detection_enabled, last_update)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(meeting_id, participant_id)
+            DO UPDATE SET detection_enabled = excluded.detection_enabled, last_update = CURRENT_TIMESTAMP
+        ''', (meeting_id, participant_id, participant_name, 1 if detection_enabled else 0))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"DB error: {e}")
+
+
+@socketio.on('confusion_update')
+def handle_confusion_update(data):
+    meeting_id = data.get('meeting_id')
+    emit('student_confusion_update', {
+        'participant_id': data.get('participant_id'),
+        'participant_name': data.get('participant_name'),
+        'confusion_rate': data.get('confusion_rate', 0),
+        'timestamp': datetime.utcnow().isoformat()
+    }, room=meeting_id, include_self=False)
+
+
+@socketio.on('confusion_confirmed')
+def handle_confusion_confirmed(data):
+    """When a student confirms they are confused via popup"""
+    meeting_id = data.get('meeting_id')
+    participant_id = data.get('participant_id')
+    participant_name = data.get('participant_name', 'Unknown')
+    confirmed = data.get('confirmed', True)
+
+    logger.info(f"*** CONFUSION CONFIRMED: {participant_name} -> {confirmed} ***")
+
+    # Save to DB
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO confusion_events (meeting_id, participant_id, participant_name, confusion_rate, confirmed)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (meeting_id, participant_id, participant_name, data.get('confusion_rate', 0), 1 if confirmed else 0))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"DB error on confusion confirm: {e}")
+
+    # Broadcast to tutor so they get the Intervene button immediately
+    emit('confusion_confirmed', {
+        'participant_id': participant_id,
+        'participant_name': participant_name,
+        'confirmed': confirmed,
+        'confusion_rate': data.get('confusion_rate', 0),
+        'timestamp': datetime.utcnow().isoformat()
+    }, room=meeting_id, include_self=False)
+
