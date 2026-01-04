@@ -313,3 +313,48 @@ def handle_status_update(data):
         conn.close()
     except Exception as e:
         logger.error(f"DB error: {e}")
+
+
+@socketio.on('confusion_update')
+def handle_confusion_update(data):
+    meeting_id = data.get('meeting_id')
+    emit('student_confusion_update', {
+        'participant_id': data.get('participant_id'),
+        'participant_name': data.get('participant_name'),
+        'confusion_rate': data.get('confusion_rate', 0),
+        'timestamp': datetime.utcnow().isoformat()
+    }, room=meeting_id, include_self=False)
+
+
+@socketio.on('confusion_confirmed')
+def handle_confusion_confirmed(data):
+    """When a student confirms they are confused via popup"""
+    meeting_id = data.get('meeting_id')
+    participant_id = data.get('participant_id')
+    participant_name = data.get('participant_name', 'Unknown')
+    confirmed = data.get('confirmed', True)
+
+    logger.info(f"*** CONFUSION CONFIRMED: {participant_name} -> {confirmed} ***")
+
+    # Save to DB
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO confusion_events (meeting_id, participant_id, participant_name, confusion_rate, confirmed)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (meeting_id, participant_id, participant_name, data.get('confusion_rate', 0), 1 if confirmed else 0))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"DB error on confusion confirm: {e}")
+
+    # Broadcast to tutor so they get the Intervene button immediately
+    emit('confusion_confirmed', {
+        'participant_id': participant_id,
+        'participant_name': participant_name,
+        'confirmed': confirmed,
+        'confusion_rate': data.get('confusion_rate', 0),
+        'timestamp': datetime.utcnow().isoformat()
+    }, room=meeting_id, include_self=False)
+
