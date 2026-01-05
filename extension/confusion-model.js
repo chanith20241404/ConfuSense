@@ -118,3 +118,53 @@ class HeuristicAnalyzer {
     }
 
     if (features.symmetry !== undefined && features.symmetry < 0.6) {
+      score += 15;
+      analysis.indicators.asymmetric = true;
+    }
+
+    const recentConfusion = this.getRecentConfusionAverage();
+    if (recentConfusion > 50) score += 10;
+
+    score += (Math.random() - 0.5) * 20;
+    analysis.confusionScore = Math.max(0, Math.min(100, score));
+    
+    this.updateHistory(analysis);
+    return analysis;
+  }
+
+  updateHistory(analysis) {
+    this.history.push(analysis);
+    if (this.history.length > this.maxHistory) this.history.shift();
+  }
+
+  getRecentConfusionAverage(frames = 10) {
+    const recent = this.history.slice(-frames);
+    if (recent.length === 0) return 0;
+    return recent.reduce((acc, a) => acc + a.confusionScore, 0) / recent.length;
+  }
+
+  getSmoothedConfusion() {
+    if (this.history.length === 0) return 0;
+    
+    let weightedSum = 0;
+    let weightTotal = 0;
+    
+    this.history.forEach((analysis, index) => {
+      const weight = index + 1;
+      weightedSum += analysis.confusionScore * weight;
+      weightTotal += weight;
+    });
+    
+    return Math.round(weightedSum / weightTotal);
+  }
+
+  reset() { this.history = []; }
+}
+
+class ConfuSenseDetector {
+  constructor(options = {}) {
+    this.options = {
+      detectionInterval: 1000,
+      confusionThreshold: 70,
+      sustainedDuration: 20000,
+      useTFModel: false,
