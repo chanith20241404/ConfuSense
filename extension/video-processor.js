@@ -53,3 +53,38 @@ class ConfuSenseVideoProcessor {
       return { success: false, error: error.message };
     }
   }
+
+  extractFaceRegion(imageData, boundingBox) {
+    if (!boundingBox) {
+      const size = Math.min(imageData.width, imageData.height) * 0.6;
+      boundingBox = {
+        x: (imageData.width - size) / 2,
+        y: (imageData.height - size) / 2,
+        width: size, height: size
+      };
+    }
+
+    const padding = 0.2;
+    const padX = boundingBox.width * padding;
+    const padY = boundingBox.height * padding;
+    
+    const x = Math.max(0, boundingBox.x - padX);
+    const y = Math.max(0, boundingBox.y - padY);
+    const width = Math.min(imageData.width - x, boundingBox.width + 2 * padX);
+    const height = Math.min(imageData.height - y, boundingBox.height + 2 * padY);
+
+    const cropCanvas = document.createElement('canvas');
+    cropCanvas.width = this.config.targetSize.width;
+    cropCanvas.height = this.config.targetSize.height;
+    const cropCtx = cropCanvas.getContext('2d');
+
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = imageData.width;
+    tempCanvas.height = imageData.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCtx.putImageData(imageData, 0, 0);
+
+    cropCtx.drawImage(tempCanvas, x, y, width, height, 0, 0, cropCanvas.width, cropCanvas.height);
+
+    const croppedData = cropCtx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
+    const grayscale = this.toGrayscale(croppedData);
