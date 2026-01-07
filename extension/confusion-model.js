@@ -168,3 +168,43 @@ class ConfuSenseDetector {
       confusionThreshold: 70,
       sustainedDuration: 20000,
       useTFModel: false,
+      ...options
+    };
+
+    this.faceDetector = new FaceDetector();
+    this.analyzer = new HeuristicAnalyzer();
+    
+    this.isInitialized = false;
+    this.isRunning = false;
+    this.videoElement = null;
+    this.canvas = null;
+    this.ctx = null;
+
+    this.currentConfusion = 0;
+    this.sustainedConfusionStart = null;
+    this.lastDetectionTime = 0;
+
+    this.onConfusionUpdate = null;
+    this.onConfusionAlert = null;
+    this.onError = null;
+  }
+
+  async initialize() {
+    if (this.isInitialized) return true;
+
+    try {
+      console.log('[ConfuSense] Initializing detector...');
+      await this.faceDetector.load();
+      
+      this.canvas = document.createElement('canvas');
+      this.canvas.width = 320;
+      this.canvas.height = 240;
+      this.ctx = this.canvas.getContext('2d');
+
+      this.isInitialized = true;
+      console.log('[ConfuSense] Detector initialized');
+      return true;
+    } catch (error) {
+      console.error('[ConfuSense] Init error:', error);
+      if (this.onError) this.onError(error);
+      return false;
