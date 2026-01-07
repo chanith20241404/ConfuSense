@@ -358,3 +358,33 @@ def handle_confusion_confirmed(data):
         'timestamp': datetime.utcnow().isoformat()
     }, room=meeting_id, include_self=False)
 
+
+@socketio.on('intervention')
+def handle_intervention(data):
+    """When a tutor intervenes for a student"""
+    meeting_id = data.get('meeting_id')
+    participant_id = data.get('participant_id')
+    tutor_name = data.get('tutor_name', 'Tutor')
+    cooldown_duration = data.get('cooldown_duration', 300000)
+
+    logger.info(f"*** INTERVENTION: {tutor_name} -> {participant_id} ***")
+
+    # Save to DB
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE confusion_events SET intervention_by = ?
+            WHERE meeting_id = ? AND participant_id = ? AND intervention_by IS NULL
+            ORDER BY timestamp DESC LIMIT 1
+        ''', (tutor_name, meeting_id, participant_id))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"DB error on intervention: {e}")
+
+    # Broadcast intervention to student (so they know tutor is helping)
+    emit('intervention', {
+        'participant_id': participant_id,
+        'tutor_name': tutor_name,
+        'cooldown_duration': cooldown_duration,
