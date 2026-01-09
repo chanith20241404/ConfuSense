@@ -88,3 +88,33 @@ class ConfuSenseVideoProcessor {
 
     const croppedData = cropCtx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
     const grayscale = this.toGrayscale(croppedData);
+
+    return { imageData: grayscale, canvas: cropCanvas, boundingBox: { x, y, width, height } };
+  }
+
+  toGrayscale(imageData) {
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      data[i] = data[i + 1] = data[i + 2] = gray;
+    }
+    return imageData;
+  }
+
+  extractFeatures(imageData) {
+    const data = imageData.data;
+    const width = imageData.width;
+    const height = imageData.height;
+    const pixelCount = width * height;
+
+    let sum = 0, sumSq = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      sum += gray;
+      sumSq += gray * gray;
+    }
+
+    const brightness = sum / pixelCount / 255;
+    const mean = sum / pixelCount;
+    const variance = (sumSq / pixelCount) - (mean * mean);
+    const contrast = Math.sqrt(variance) / 255;
