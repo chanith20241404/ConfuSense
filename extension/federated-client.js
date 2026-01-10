@@ -1,0 +1,20 @@
+/**
+ * ConfuSense Federated Learning Client
+ * Privacy-preserving local training and model sync
+ * Sprint 3: Federated Learning
+ */
+
+class ConfuSenseFLClient {
+  constructor(options = {}) {
+    this.options = {
+      clientId: this.generateClientId(),
+      serverUrl: 'https://confusense-api.onrender.com',
+      minSamplesForTraining: 20,
+      localEpochs: 3,
+      learningRate: 0.01,
+      useDifferentialPrivacy: true,
+      dpNoiseMultiplier: 0.1,
+      dpL2NormClip: 1.0,
+      syncInterval: 60000,
+      ...options
+    };
