@@ -208,3 +208,53 @@ class ConfuSenseDetector {
       console.error('[ConfuSense] Init error:', error);
       if (this.onError) this.onError(error);
       return false;
+    }
+  }
+
+  async start(videoElement) {
+    if (!this.isInitialized) await this.initialize();
+    if (this.isRunning) { console.log('[ConfuSense] Already running'); return; }
+
+    this.videoElement = videoElement;
+    this.isRunning = true;
+    this.analyzer.reset();
+
+    console.log('[ConfuSense] Detection started');
+    this.runDetectionLoop();
+  }
+
+  stop() {
+    this.isRunning = false;
+    this.analyzer.reset();
+    console.log('[ConfuSense] Detection stopped');
+  }
+
+  async runDetectionLoop() {
+    if (!this.isRunning) return;
+
+    const now = Date.now();
+    if (now - this.lastDetectionTime >= this.options.detectionInterval) {
+      await this.detectConfusion();
+      this.lastDetectionTime = now;
+    }
+
+    requestAnimationFrame(() => this.runDetectionLoop());
+  }
+
+  async detectConfusion() {
+    if (!this.videoElement || this.videoElement.readyState < 2) return;
+
+    try {
+      this.ctx.drawImage(this.videoElement, 0, 0, this.canvas.width, this.canvas.height);
+      const faces = await this.faceDetector.detectFaces(this.videoElement);
+      const features = this.extractFeatures();
+
+      let analysis;
+      if (faces.length > 0) {
+        analysis = this.analyzer.analyzeFrame(faces[0], features);
+      } else {
+        analysis = this.analyzer.analyzeFrame(null, features);
+      }
+
+      this.currentConfusion = this.analyzer.getSmoothedConfusion();
+      this.checkSustainedConfusion();
