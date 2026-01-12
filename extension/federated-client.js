@@ -18,3 +18,23 @@ class ConfuSenseFLClient {
       syncInterval: 60000,
       ...options
     };
+
+    this.trainingData = [];
+    this.localModel = null;
+    this.globalModelVersion = 0;
+    this.isTraining = false;
+    this.lastSyncTime = 0;
+    this.syncInterval = null;
+
+    this.onModelUpdated = null;
+    this.onTrainingComplete = null;
+    this.onSyncComplete = null;
+  }
+
+  generateClientId() {
+    return 'client_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+  }
+
+  async initialize(globalWeights = null) {
+    console.log('[ConfuSense FL] Initializing client:', this.options.clientId);
+    
