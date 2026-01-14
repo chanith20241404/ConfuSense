@@ -38,3 +38,28 @@ class ConfuSenseFLClient {
   async initialize(globalWeights = null) {
     console.log('[ConfuSense FL] Initializing client:', this.options.clientId);
     
+    if (globalWeights) {
+      this.localModel = this.cloneWeights(globalWeights);
+    } else {
+      await this.syncWithServer();
+    }
+
+    this.startPeriodicSync();
+    return this;
+  }
+
+  addTrainingSample(features, label, metadata = {}) {
+    this.trainingData.push({
+      features: Array.isArray(features) ? features : Array.from(features),
+      label: label,
+      timestamp: Date.now(),
+      ...metadata
+    });
+
+    if (this.trainingData.length > 1000) {
+      this.trainingData = this.trainingData.slice(-1000);
+    }
+
+    if (this.trainingData.length >= this.options.minSamplesForTraining && !this.isTraining) {
+      this.trainLocal();
+    }
