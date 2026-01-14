@@ -258,3 +258,43 @@ class ConfuSenseDetector {
 
       this.currentConfusion = this.analyzer.getSmoothedConfusion();
       this.checkSustainedConfusion();
+
+      if (this.onConfusionUpdate) {
+        this.onConfusionUpdate({
+          rate: this.currentConfusion,
+          raw: analysis.confusionScore,
+          indicators: analysis.indicators,
+          timestamp: Date.now()
+        });
+      }
+
+    } catch (error) {
+      console.error('[ConfuSense] Detection error:', error);
+    }
+  }
+
+  extractFeatures() {
+    const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+    const data = imageData.data;
+    
+    let sum = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+    }
+    const brightness = sum / (data.length / 4) / 255;
+
+    let variance = 0;
+    const mean = sum / (data.length / 4);
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      variance += (gray - mean) ** 2;
+    }
+    variance /= (data.length / 4);
+
+    let symmetryDiff = 0;
+    const width = this.canvas.width;
+    const height = this.canvas.height;
+    
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width / 2; x++) {
+        const leftIdx = (y * width + x) * 4;
