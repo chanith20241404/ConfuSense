@@ -118,3 +118,56 @@ class ConfuSenseVideoProcessor {
     const mean = sum / pixelCount;
     const variance = (sumSq / pixelCount) - (mean * mean);
     const contrast = Math.sqrt(variance) / 255;
+
+    let edgeSum = 0;
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const idx = (y * width + x) * 4;
+        const gx = data[idx + 4] - data[idx - 4];
+        const gy = data[idx + width * 4] - data[idx - width * 4];
+        edgeSum += Math.sqrt(gx * gx + gy * gy);
+      }
+    }
+    const edgeDensity = edgeSum / ((width - 2) * (height - 2)) / 255;
+
+    let symmetrySum = 0;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < Math.floor(width / 2); x++) {
+        const leftIdx = (y * width + x) * 4;
+        const rightIdx = (y * width + (width - 1 - x)) * 4;
+        symmetrySum += 1 - Math.abs(data[leftIdx] - data[rightIdx]) / 255;
+      }
+    }
+    const symmetry = symmetrySum / (height * Math.floor(width / 2));
+
+    return { brightness, contrast, edgeDensity, symmetry };
+  }
+
+  detectMotion(currentFrame) {
+    if (!this.previousFrame) return { hasMotion: false, magnitude: 0 };
+
+    const current = currentFrame.data;
+    const previous = this.previousFrame.data;
+    
+    let diffSum = 0;
+    const pixelCount = current.length / 4;
+
+    for (let i = 0; i < current.length; i += 4) {
+      diffSum += Math.abs(current[i] - previous[i]);
+    }
+
+    const avgDiff = diffSum / pixelCount;
+    return { hasMotion: avgDiff > 10, magnitude: avgDiff / 255 };
+  }
+
+  getCanvas() { return this.canvas; }
+
+  destroy() {
+    this.canvas = null;
+    this.ctx = null;
+    this.previousFrame = null;
+    this.isReady = false;
+  }
+}
+
+window.ConfuSenseVideoProcessor = ConfuSenseVideoProcessor;
