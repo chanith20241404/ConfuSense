@@ -148,3 +148,26 @@ class ConfuSenseVideoProcessor {
 
     const current = currentFrame.data;
     const previous = this.previousFrame.data;
+    
+    let diffSum = 0;
+    const pixelCount = current.length / 4;
+
+    for (let i = 0; i < current.length; i += 4) {
+      diffSum += Math.abs(current[i] - previous[i]);
+    }
+
+    const avgDiff = diffSum / pixelCount;
+    return { hasMotion: avgDiff > 10, magnitude: avgDiff / 255 };
+  }
+
+  getCanvas() { return this.canvas; }
+
+  destroy() {
+    this.canvas = null;
+    this.ctx = null;
+    this.previousFrame = null;
+    this.isReady = false;
+  }
+}
+
+window.ConfuSenseVideoProcessor = ConfuSenseVideoProcessor;
