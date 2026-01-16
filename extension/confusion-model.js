@@ -298,3 +298,40 @@ class ConfuSenseDetector {
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width / 2; x++) {
         const leftIdx = (y * width + x) * 4;
+        const rightIdx = (y * width + (width - 1 - x)) * 4;
+        symmetryDiff += Math.abs(data[leftIdx] - data[rightIdx]);
+      }
+    }
+    const symmetry = 1 - (symmetryDiff / (width / 2 * height) / 255);
+
+    return { brightness, variance: Math.sqrt(variance) / 255, symmetry, frameWidth: this.canvas.width, frameHeight: this.canvas.height };
+  }
+
+  checkSustainedConfusion() {
+    if (this.currentConfusion >= this.options.confusionThreshold) {
+      if (!this.sustainedConfusionStart) {
+        this.sustainedConfusionStart = Date.now();
+      } else {
+        const duration = Date.now() - this.sustainedConfusionStart;
+        
+        if (duration >= this.options.sustainedDuration) {
+          if (this.onConfusionAlert) {
+            this.onConfusionAlert({ rate: this.currentConfusion, duration, timestamp: Date.now() });
+          }
+          this.sustainedConfusionStart = Date.now();
+        }
+      }
+    } else {
+      this.sustainedConfusionStart = null;
+    }
+  }
+
+  getCurrentRate() { return this.currentConfusion; }
+  getAverageConfusion() { return this.analyzer.getSmoothedConfusion(); }
+  setThreshold(threshold) { this.options.confusionThreshold = threshold; }
+  dispose() { this.stop(); this.analyzer.reset(); }
+}
+
+window.ConfuSenseDetector = ConfuSenseDetector;
+window.ConfuSenseFaceDetector = FaceDetector;
+window.ConfuSenseHeuristicAnalyzer = HeuristicAnalyzer;
