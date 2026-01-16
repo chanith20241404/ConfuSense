@@ -63,3 +63,28 @@ class ConfuSenseFLClient {
     if (this.trainingData.length >= this.options.minSamplesForTraining && !this.isTraining) {
       this.trainLocal();
     }
+  }
+
+  async trainLocal() {
+    if (this.isTraining || this.trainingData.length < this.options.minSamplesForTraining) return null;
+
+    this.isTraining = true;
+    console.log('[ConfuSense FL] Starting local training with', this.trainingData.length, 'samples');
+
+    try {
+      const X = this.trainingData.map(s => s.features);
+      const y = this.trainingData.map(s => s.label);
+      const weightUpdates = await this.simulateTraining(X, y);
+
+      let finalUpdates = weightUpdates;
+      if (this.options.useDifferentialPrivacy) {
+        finalUpdates = this.applyDifferentialPrivacy(weightUpdates);
+      }
+
+      const metrics = this.calculateMetrics(X, y);
+
+      const update = {
+        clientId: this.options.clientId,
+        weights: finalUpdates,
+        numSamples: this.trainingData.length,
+        metrics: metrics,
