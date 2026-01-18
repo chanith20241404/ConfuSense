@@ -88,3 +88,28 @@ class ConfuSenseFLClient {
         weights: finalUpdates,
         numSamples: this.trainingData.length,
         metrics: metrics,
+        modelVersion: this.globalModelVersion,
+        timestamp: Date.now()
+      };
+
+      await this.submitUpdate(update);
+      this.trainingData = [];
+
+      if (this.onTrainingComplete) this.onTrainingComplete(update);
+
+      this.isTraining = false;
+      return update;
+
+    } catch (error) {
+      console.error('[ConfuSense FL] Training error:', error);
+      this.isTraining = false;
+      return null;
+    }
+  }
+
+  async simulateTraining(X, y) {
+    const weights = this.localModel || this.initializeWeights();
+    const updates = {};
+
+    for (const layerName in weights) {
+      const layerWeights = weights[layerName];
