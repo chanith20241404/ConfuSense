@@ -178,3 +178,143 @@ class DOMParser {
     const selfNameEl = document.querySelector('[data-self-name]');
     if (selfNameEl) {
       const name = selfNameEl.getAttribute('data-self-name');
+      if (name) {
+        this._setSelfInfo(name);
+        return;
+      }
+    }
+
+    // Method 2: aria-label containing "(You)" on any element
+    const youElements = document.querySelectorAll('[aria-label*="(You)"]');
+    for (const el of youElements) {
+      const label = el.getAttribute('aria-label') || '';
+      const name = this.cleanName(label);
+      if (name && name.length >= 2) {
+        this._setSelfInfo(name);
+        return;
+      }
+    }
+
+    // Method 3: Look for "(You)" in participant list items
+    const listItems = document.querySelectorAll(this.selectors.participantItem);
+    for (const item of listItems) {
+      const text = item.textContent || '';
+      if (text.includes('(You)')) {
+        const name = this.cleanName(text);
+        if (name && name.length >= 2) {
+          this._setSelfInfo(name);
+          return;
+        }
+      }
+    }
+
+    // Method 4: Walk the DOM tree to find the INNERMOST element containing "(You)"
+    // This avoids grabbing huge parent textContent
+    const treeWalker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      { acceptNode: (node) => {
+        const text = node.textContent || '';
+        return text.includes('(You)') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      }}
+    );
+    let textNode;
+    while (textNode = treeWalker.nextNode()) {
+      // Get the parent element's direct text
+      const parent = textNode.parentElement;
+      if (parent) {
+        // Use only this element's own text, not children
+        const ownText = Array.from(parent.childNodes)
+          .filter(n => n.nodeType === Node.TEXT_NODE)
+          .map(n => n.textContent)
+          .join('');
+        if (ownText.includes('(You)')) {
+          const name = this.cleanName(ownText);
+          if (name && name.length >= 2 && name !== 'You') {
+            this._setSelfInfo(name);
+            return;
+          }
+        }
+        // Also try the parent's full textContent if it's small
+        const fullText = parent.textContent || '';
+        if (fullText.includes('(You)') && fullText.length < 100) {
+          const name = this.cleanName(fullText);
+          if (name && name.length >= 2 && name !== 'You') {
+            this._setSelfInfo(name);
+            return;
+          }
+        }
+      }
+    }
+
+    // Method 5: Guest name input field (guests type their name before joining)
+    const nameInputs = document.querySelectorAll('input[type="text"]');
+    for (const input of nameInputs) {
+      const label = (input.getAttribute('aria-label') || '').toLowerCase();
+      if (label.includes('name') || label.includes('your name')) {
+        const name = input.value?.trim();
+        if (name && name.length >= 2) {
+          this._setSelfInfo(name);
+          return;
+        }
+      }
+    }
+
+    // Method 6: Google Meet name display classes — find name elements with "(You)" nearby
+    const nameEls = document.querySelectorAll('[class*="ZjFb7c"], [class*="zWGUib"]');
+    for (const el of nameEls) {
+      const text = el.textContent?.trim() || '';
+      // Check if this element or a nearby sibling/parent has "(You)"
+      const parentText = el.parentElement?.textContent || '';
+      if (parentText.includes('(You)') || text.includes('(You)')) {
+        const name = this.cleanName(text.includes('(You)') ? text : parentText);
+        if (name && name.length >= 2 && name !== 'You') {
+          this._setSelfInfo(name);
+          return;
+        }
+      }
+    }
+
+    // Method 7: Look for "You" as a standalone text in video tile name labels
+    for (const el of nameEls) {
+      const text = el.textContent?.trim() || '';
+      if (text === 'You' || text === 'you') {
+        // This is the self tile but Google doesn't show the full name here
+        // Check data attributes on parent tile
+        const tile = el.closest('[data-participant-id], [data-requested-participant-id]');
+        if (tile) {
+          const tileName = tile.getAttribute('data-participant-name') ||
+                          tile.getAttribute('aria-label');
+          if (tileName) {
+            const name = this.cleanName(tileName);
+            if (name && name.length >= 2) {
+              this._setSelfInfo(name);
+              return;
+            }
+          }
+        }
+      }
+    }
+
+    // Method 8: Guest users — look for the self-view indicator and nearby name
+    // Google Meet shows a small "You" badge or microphone icon on the self tile
+    const selfIndicators = document.querySelectorAll(
+      '[data-self-name], [data-is-self="true"], [data-is-local="true"]'
+    );
+    for (const indicator of selfIndicators) {
+      const tile = indicator.closest('[data-participant-id], [data-requested-participant-id]') || indicator;
+      const nameEl = tile.querySelector('[class*="ZjFb7c"], [class*="zWGUib"]');
+      if (nameEl) {
+        const name = this.cleanName(nameEl.textContent);
+        if (name && name.length >= 2 && name !== 'You') {
+          this._setSelfInfo(name);
+          return;
+        }
+      }
+      // Also check aria-label on the tile itself
+      const ariaName = tile.getAttribute('aria-label');
+      if (ariaName) {
+        const name = this.cleanName(ariaName);
+        if (name && name.length >= 2 && name !== 'You') {
+          this._setSelfInfo(name);
+          return;
