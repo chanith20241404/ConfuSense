@@ -218,3 +218,203 @@ class ConfuSenseApp {
       return true;
     } catch (error) {
       console.error('[ConfuSense] WebSocket creation failed:', error);
+      return false;
+    }
+  }
+
+  // ==================== WEBSOCKET HELPERS ====================
+
+  joinMeetingRoom() {
+    if (!this.socket || !this.socket.connected) return;
+
+    const selfName = this.domParser?.selfInfo?.name;
+    if (!selfName) {
+      console.log('[ConfuSense] Skipping join — name not yet available, will retry');
+      return;
+    }
+
+    console.log('[ConfuSense] Joining meeting room:', this.state.meetingId, 'as', selfName);
+
+    this.socket.emit('join_meeting', {
+      meeting_id: this.state.meetingId,
+      participant_id: this.state.selfParticipantId,
+      participant_name: selfName,
+      role: this.settings.role,
+      detection_enabled: this.settings.enabled
+    });
+    this.state.hasJoinedRoom = true;
+  }
+
+  leaveMeetingRoom() {
+    if (!this.socket) return;
+    
+    const selfName = this.domParser?.selfInfo?.name || 'Unknown';
+    
+    this.socket.emit('leave_meeting', {
+      meeting_id: this.state.meetingId,
+      participant_id: this.state.selfParticipantId,
+      participant_name: selfName
+    });
+  }
+
+  // ==================== WEBSOCKET EVENT HANDLERS ====================
+
+  handleRemoteStatusChange(data) {
+    const { participant_id, participant_name, detection_enabled } = data;
+    
+    console.log(`[ConfuSense] Remote status: ${participant_name} -> ${detection_enabled ? 'ON' : 'OFF'}`);
+    
+    if (this.isTutor()) {
+      if (detection_enabled) {
+        if (!this.state.activeStudents.has(participant_id)) {
+          const student = {
+            id: participant_id,
+            name: participant_name,
+            confusionRate: Math.floor(Math.random() * 40) + 30,
+            detectionEnabled: true,
+            role: 'student'
+          };
+          this.state.activeStudents.set(participant_id, student);
+          console.log('[ConfuSense] Added student:', participant_name);
+        } else {
+          const student = this.state.activeStudents.get(participant_id);
+          student.detectionEnabled = true;
+        }
+      } else {
+        if (this.state.activeStudents.has(participant_id)) {
+          this.state.activeStudents.delete(participant_id);
+          console.log('[ConfuSense] *** REMOVED student:', participant_name);
+        }
+      }
+      
+      this.ui?.updateDashboard(this.getActiveStudentsArray());
+    }
+  }
+
+  handleRemoteParticipantJoin(data) {
+    const { participant_id, participant_name, role, detection_enabled } = data;
+    
+    if (participant_id === this.state.selfParticipantId) return;
+    if (role === 'tutor') return;
+    
+    if (this.isTutor() && detection_enabled) {
+      const student = {
+        id: participant_id,
+        name: participant_name,
+        confusionRate: Math.floor(Math.random() * 40) + 30,
+        detectionEnabled: detection_enabled,
+        role: 'student'
+      };
+      this.state.activeStudents.set(participant_id, student);
+      this.ui?.updateDashboard(this.getActiveStudentsArray());
+      console.log('[ConfuSense] Student joined (WS):', participant_name);
+    }
+  }
+
+  handleRemoteParticipantLeave(data) {
+    const { participant_id, participant_name } = data;
+    
+    if (this.isTutor()) {
+      this.state.activeStudents.delete(participant_id);
+      this.state.participants.delete(participant_id);
+      this.ui?.updateDashboard(this.getActiveStudentsArray());
+      console.log('[ConfuSense] Student left (WS):', participant_name);
+    }
+  }
+
+  handleParticipantsList(data) {
+    const { participants } = data;
+    
+    if (this.isTutor()) {
+      participants.forEach(p => {
+        if (p.role !== 'tutor' && p.detection_enabled && p.participant_id !== this.state.selfParticipantId) {
+          const student = {
+            id: p.participant_id,
+            name: p.participant_name,
+            confusionRate: Math.floor(Math.random() * 40) + 30,
+            detectionEnabled: p.detection_enabled,
+            role: 'student'
+          };
+          this.state.activeStudents.set(p.participant_id, student);
+        }
+      });
+      this.ui?.updateDashboard(this.getActiveStudentsArray());
+    }
+  }
+
+  handleRemoteConfusionUpdate(data) {
+    const { participant_id, confusion_rate } = data;
+
+    if (this.isTutor() && this.state.activeStudents.has(participant_id)) {
+      const student = this.state.activeStudents.get(participant_id);
+      student.confusionRate = confusion_rate;
+      this.ui?.updateDashboard(this.getActiveStudentsArray());
+    }
+  }
+
+  handleRemoteConfusionConfirmed(data) {
+    const { participant_id, participant_name, confirmed, confusion_rate } = data;
+    console.log(`[ConfuSense] Confusion confirmed by ${participant_name}: ${confirmed}`);
+
+    if (this.isTutor() && confirmed) {
+      // Update confusion rate if provided
+      if (this.state.activeStudents.has(participant_id)) {
+        const student = this.state.activeStudents.get(participant_id);
+        if (confusion_rate) student.confusionRate = confusion_rate;
+      }
+      // Mark student as confirmed on dashboard — shows Intervene button
+      this.ui?.markStudentConfirmed(participant_id);
+    }
+  }
+
+  handleRemoteIntervention(data) {
+    const { participant_id, tutor_name, cooldown_duration } = data;
+    console.log(`[ConfuSense] Intervention by ${tutor_name} for ${participant_id}`);
+
+    // Student side: show notification and start cooldown
+    if (this.isStudent() && participant_id === this.state.selfParticipantId) {
+      console.log(`[ConfuSense] Tutor ${tutor_name} is helping me — cooldown ${cooldown_duration}ms`);
+      this.ui?.hideStudentPopup();
+      this.startInterventionCooldown(cooldown_duration || 300000);
+    }
+
+    // Tutor side: clear confirmed state
+    if (this.isTutor()) {
+      this.ui?.clearStudentConfirmed(participant_id);
+    }
+  }
+
+  startInterventionCooldown(duration) {
+    this.state.interventionCooldownUntil = Date.now() + duration;
+    console.log(`[ConfuSense] Cooldown active for ${duration / 1000}s`);
+  }
+
+  // ==================== SEND STATUS UPDATE ====================
+
+  sendStatusUpdate(enabled) {
+    const selfName = this.domParser?.selfInfo?.name;
+    if (!selfName) {
+      console.log('[ConfuSense] Deferring status — name not yet available');
+      return;
+    }
+
+    console.log(`[ConfuSense] Sending status: ${enabled ? 'ON' : 'OFF'} as ${selfName}`);
+
+    if (this.socket && this.socket.connected) {
+      this.socket.emit('participant_status_update', {
+        meeting_id: this.state.meetingId,
+        participant_id: this.state.selfParticipantId,
+        participant_name: selfName,
+        detection_enabled: enabled
+      });
+      console.log('[ConfuSense] ✓ Status sent via WebSocket');
+    } else {
+      console.log('[ConfuSense] WebSocket not connected yet — queuing status update');
+      this._pendingStatusUpdate = enabled;
+    }
+  }
+
+  // ==================== ROLE HELPERS ====================
+
+  isTutor() {
+    return this.settings.role === 'tutor' || this.state.wasEverHost;
