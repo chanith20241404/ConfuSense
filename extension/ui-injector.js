@@ -298,3 +298,253 @@ class UIInjector {
       this.elements.dashboard.classList.add('cs-hidden');
       this.state.dashboardVisible = false;
     }
+    if (this.elements.dashboardBubble) {
+      this.elements.dashboardBubble.classList.add('cs-hidden');
+    }
+    this.state.dashboardMinimized = false;
+  }
+
+  minimizeDashboard() {
+    if (this.elements.dashboard) {
+      this.elements.dashboard.classList.add('cs-hidden');
+    }
+
+    if (!this.elements.dashboardBubble) {
+      this.elements.dashboardBubble = document.createElement('div');
+      this.elements.dashboardBubble.className = 'cs-dashboard-bubble';
+      this.elements.dashboardBubble.innerHTML = `
+        <span class="cs-bubble-logo">CS</span>
+        <span class="cs-bubble-rate">${this.overallConfusion}%</span>
+      `;
+      this.elements.container.appendChild(this.elements.dashboardBubble);
+      this.elements.dashboardBubble.addEventListener('click', () => this.expandDashboard());
+      this.setupDrag(this.elements.dashboardBubble);
+    }
+
+    this.elements.dashboardBubble.classList.remove('cs-hidden');
+    this.updateBubble();
+    this.state.dashboardVisible = false;
+    this.state.dashboardMinimized = true;
+  }
+
+  expandDashboard() {
+    if (this.elements.dashboardBubble) {
+      this.elements.dashboardBubble.classList.add('cs-hidden');
+    }
+    if (this.elements.dashboard) {
+      this.elements.dashboard.classList.remove('cs-hidden');
+      this.updateDashboard();
+    }
+    this.state.dashboardVisible = true;
+    this.state.dashboardMinimized = false;
+  }
+
+  updateBubble() {
+    if (!this.elements.dashboardBubble) return;
+    const rateEl = this.elements.dashboardBubble.querySelector('.cs-bubble-rate');
+    if (rateEl) rateEl.textContent = `${this.overallConfusion}%`;
+  }
+
+  bindDashboardEvents() {
+    const d = this.elements.dashboard;
+    if (!d) return;
+
+    d.querySelector('#cs-minimize')?.addEventListener('click', () => this.minimizeDashboard());
+    d.querySelector('#cs-collapse')?.addEventListener('click', () => {
+      d.querySelector('.cs-body')?.classList.toggle('cs-hidden');
+    });
+    d.querySelector('#cs-close')?.addEventListener('click', () => this.minimizeDashboard());
+
+    d.querySelector('#cs-export')?.addEventListener('click', () => {
+      this.generatePDFReport();
+    });
+  }
+
+  // ==================== STUDENT CONFIRMED CONFUSION ====================
+
+  markStudentConfirmed(studentId) {
+    this.confirmedConfusions.set(studentId, Date.now());
+    this.updateDashboard();
+  }
+
+  clearStudentConfirmed(studentId) {
+    this.confirmedConfusions.delete(studentId);
+    this.updateDashboard();
+  }
+
+  // Record an intervention event with real data
+  recordIntervention(studentId, studentName, tutorName) {
+    const now = Date.now();
+    if (!this.studentInterventions.has(studentId)) {
+      this.studentInterventions.set(studentId, []);
+    }
+    this.studentInterventions.get(studentId).push({
+      timestamp: now,
+      tutorName: tutorName || 'Tutor',
+      studentName: studentName
+    });
+
+    // Also mark the most recent confusion event as having intervention
+    if (this.confusionEvents.has(studentId)) {
+      const events = this.confusionEvents.get(studentId);
+      if (events.length > 0) {
+        events[events.length - 1].intervention = 'Intervened';
+        events[events.length - 1].interventionBy = tutorName || 'Tutor';
+      }
+    }
+
+    // Log to sessionLog
+    this.sessionLog.push({
+      timestamp: now,
+      studentId: studentId,
+      studentName: studentName,
+      confusionRate: 0,
+      confirmed: true,
+      intervention: tutorName || 'Tutor'
+    });
+  }
+
+  // ==================== STUDENT STATUS WIDGET ====================
+
+  showStudentStatus(enabled = true) {
+    if (this.elements.studentStatus) {
+      this.elements.studentStatus.remove();
+    }
+
+    this.state.detectionEnabled = enabled;
+
+    this.elements.studentStatus = document.createElement('div');
+    this.elements.studentStatus.className = 'cs-student-status';
+    this.elements.studentStatus.innerHTML = `
+      <div class="cs-status-header">
+        <span class="cs-logo" style="font-size:13px;"><span class="cs-logo-purple">Confu</span><span class="cs-logo-white">Sense</span></span>
+      </div>
+      <div class="cs-status-body">
+        <div class="cs-toggle-row">
+          <span class="cs-toggle-label">Confusion detection ON/OFF</span>
+          <div class="cs-toggle-container">
+            <span class="cs-toggle-text ${enabled ? 'cs-on' : 'cs-off'}">${enabled ? 'On' : 'Off'}</span>
+            <div class="cs-toggle-switch ${enabled ? 'on' : 'off'}">
+              <div class="cs-toggle-knob"></div>
+            </div>
+          </div>
+        </div>
+        <div class="cs-status-info">We analyse micro-expressions only during active calls.</div>
+        <div class="cs-status-buttons">
+          <button class="cs-link-btn">Privacy Policy</button>
+          <button class="cs-link-btn cs-primary">Support</button>
+        </div>
+      </div>
+    `;
+
+    this.elements.container.appendChild(this.elements.studentStatus);
+    this.state.studentStatusVisible = true;
+
+    const toggleSwitch = this.elements.studentStatus.querySelector('.cs-toggle-switch');
+    toggleSwitch?.addEventListener('click', () => {
+      this.state.detectionEnabled = !this.state.detectionEnabled;
+      this.updateStudentStatusUI(this.state.detectionEnabled);
+      if (this.callbacks.onToggleDetection) {
+        this.callbacks.onToggleDetection(this.state.detectionEnabled);
+      }
+    });
+
+    this.setupDrag(this.elements.studentStatus, '.cs-status-header');
+  }
+
+  updateStudentStatus(enabled) {
+    this.state.detectionEnabled = enabled;
+    this.updateStudentStatusUI(enabled);
+  }
+
+  updateStudentStatusUI(enabled) {
+    if (!this.elements.studentStatus) return;
+    const toggleSwitch = this.elements.studentStatus.querySelector('.cs-toggle-switch');
+    const toggleText = this.elements.studentStatus.querySelector('.cs-toggle-text');
+    if (toggleSwitch) toggleSwitch.className = `cs-toggle-switch ${enabled ? 'on' : 'off'}`;
+    if (toggleText) {
+      toggleText.textContent = enabled ? 'On' : 'Off';
+      toggleText.className = `cs-toggle-text ${enabled ? 'cs-on' : 'cs-off'}`;
+    }
+  }
+
+  hideStudentStatus() {
+    if (this.elements.studentStatus) {
+      this.elements.studentStatus.remove();
+      this.elements.studentStatus = null;
+      this.state.studentStatusVisible = false;
+    }
+  }
+
+  // ==================== POPUP ====================
+
+  showStudentPopup(onResponse = null) {
+    if (this.elements.popup) this.elements.popup.remove();
+    if (this.popupTimeout) clearTimeout(this.popupTimeout);
+
+    this.elements.popup = document.createElement('div');
+    this.elements.popup.className = 'cs-popup';
+    this.elements.popup.innerHTML = `
+      <div class="cs-popup-header">
+        <span class="cs-logo" style="font-size:14px;"><span class="cs-logo-purple">Confu</span><span class="cs-logo-white">Sense</span></span>
+      </div>
+      <div class="cs-popup-body">
+        <span class="cs-popup-emoji">🤔</span>
+        <span class="cs-popup-message">We detected confusion.<br>Are you confused?</span>
+      </div>
+      <div class="cs-popup-actions">
+        <button id="cs-yes-btn" class="cs-popup-btn cs-btn-yes">YES</button>
+        <button id="cs-no-btn" class="cs-popup-btn cs-btn-no">NO</button>
+      </div>
+    `;
+
+    this.elements.container.appendChild(this.elements.popup);
+    this.state.popupVisible = true;
+
+    this.elements.popup.querySelector('#cs-yes-btn')?.addEventListener('click', () => {
+      this.hideStudentPopup();
+      if (onResponse) onResponse(true, false);
+      else if (this.callbacks.onPopupResponse) this.callbacks.onPopupResponse(true, false);
+    });
+
+    this.elements.popup.querySelector('#cs-no-btn')?.addEventListener('click', () => {
+      this.hideStudentPopup();
+      if (onResponse) onResponse(false, false);
+      else if (this.callbacks.onPopupResponse) this.callbacks.onPopupResponse(false, false);
+    });
+
+    this.popupTimeout = setTimeout(() => {
+      this.hideStudentPopup();
+      if (onResponse) onResponse(true, true);
+    }, 15000);
+  }
+
+  hideStudentPopup() {
+    if (this.popupTimeout) clearTimeout(this.popupTimeout);
+    if (this.elements.popup) {
+      this.elements.popup.remove();
+      this.elements.popup = null;
+      this.state.popupVisible = false;
+    }
+  }
+
+  hidePopup() { this.hideStudentPopup(); }
+
+  // ==================== ALERT ====================
+
+  showTutorAlert(student) {
+    if (this.elements.alert) this.elements.alert.remove();
+
+    this.elements.alert = document.createElement('div');
+    this.elements.alert.className = 'cs-alert';
+    this.elements.alert.innerHTML = `
+      <div class="cs-alert-header">
+        <div class="cs-alert-icon">⚠️</div>
+        <div class="cs-alert-title">
+          <h3>Sustained Confusion Alert</h3>
+          <p>Intervention recommended</p>
+        </div>
+        <button id="cs-alert-close" class="cs-alert-close">×</button>
+      </div>
+      <div class="cs-alert-body">
+        <p><strong>${student.name}</strong> has exhibited a confusion rate above 70% for 20 seconds. Recommended intervention is advised.</p>
