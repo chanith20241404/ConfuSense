@@ -113,3 +113,28 @@ class ConfuSenseFLClient {
 
     for (const layerName in weights) {
       const layerWeights = weights[layerName];
+      
+      if (Array.isArray(layerWeights)) {
+        updates[layerName] = layerWeights.map(w => {
+          if (typeof w === 'number') return w + (Math.random() - 0.5) * this.options.learningRate;
+          return w;
+        });
+      } else if (typeof layerWeights === 'object') {
+        updates[layerName] = {};
+        for (const key in layerWeights) {
+          updates[layerName][key] = layerWeights[key] + (Math.random() - 0.5) * this.options.learningRate;
+        }
+      }
+    }
+
+    return updates;
+  }
+
+  initializeWeights() {
+    return {
+      'conv1': { weight: Array(288).fill(0).map(() => Math.random() * 0.1 - 0.05) },
+      'conv2': { weight: Array(18432).fill(0).map(() => Math.random() * 0.1 - 0.05) },
+      'dense1': { weight: Array(8192).fill(0).map(() => Math.random() * 0.1 - 0.05) },
+      'output': { weight: Array(130).fill(0).map(() => Math.random() * 0.1 - 0.05) }
+    };
+  }
