@@ -138,3 +138,28 @@ class ConfuSenseFLClient {
       'output': { weight: Array(130).fill(0).map(() => Math.random() * 0.1 - 0.05) }
     };
   }
+
+  applyDifferentialPrivacy(weights) {
+    const noised = {};
+    
+    for (const layerName in weights) {
+      const layerWeights = weights[layerName];
+      
+      if (Array.isArray(layerWeights)) {
+        const clipped = this.clipGradients(layerWeights);
+        noised[layerName] = clipped.map(w => w + this.gaussianNoise() * this.options.dpNoiseMultiplier);
+      } else if (typeof layerWeights === 'object') {
+        noised[layerName] = {};
+        for (const key in layerWeights) {
+          noised[layerName][key] = layerWeights[key] + this.gaussianNoise() * this.options.dpNoiseMultiplier;
+        }
+      }
+    }
+
+    return noised;
+  }
+
+  clipGradients(gradients) {
+    let l2Norm = 0;
+    gradients.forEach(g => { l2Norm += g * g; });
+    l2Norm = Math.sqrt(l2Norm);
