@@ -318,3 +318,133 @@ class DOMParser {
         if (name && name.length >= 2 && name !== 'You') {
           this._setSelfInfo(name);
           return;
+        }
+      }
+    }
+
+    // Method 9: Guest fallback — look for muted microphone indicator on self tile
+    // The self tile usually has mic/camera controls directly attached
+    const micButtons = document.querySelectorAll('[aria-label*="microphone" i][data-is-muted]');
+    for (const btn of micButtons) {
+      const tile = btn.closest('[data-participant-id], [data-requested-participant-id]');
+      if (tile) {
+        const nameEl = tile.querySelector('[class*="ZjFb7c"], [class*="zWGUib"]');
+        if (nameEl) {
+          const rawText = nameEl.textContent?.trim();
+          if (rawText && rawText !== 'You' && rawText !== 'you') {
+            const name = this.cleanName(rawText);
+            if (name && name.length >= 2) {
+              this._setSelfInfo(name);
+              return;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  _setSelfInfo(name) {
+    this.selfInfo = {
+      id: 'self',
+      name: name,
+      isSelf: true,
+      isHost: false,
+      role: 'unknown',
+      joinedAt: Date.now()
+    };
+    console.log('[ConfuSense DOM] Self identified:', name);
+  }
+
+  // ==================== PARTICIPANT PARSING ====================
+
+  parseAllParticipants() {
+    const foundParticipants = new Map();
+
+    // Parse from video tiles
+    const videoTiles = document.querySelectorAll(this.selectors.videoTiles);
+    videoTiles.forEach((tile, index) => {
+      const id = tile.getAttribute('data-participant-id') || `tile_${index}`;
+      const name = this.extractNameFromElement(tile);
+      
+      if (name && !this.isSelfName(name)) {
+        foundParticipants.set(id, { id, name, isSelf: false });
+      }
+    });
+
+    // Parse from participant panel
+    const panels = document.querySelectorAll(this.selectors.participantPanel);
+    panels.forEach(panel => {
+      const items = panel.querySelectorAll(this.selectors.participantItem);
+      items.forEach((item, index) => {
+        const name = this.extractNameFromElement(item);
+        if (name && !this.isSelfName(name)) {
+          const id = `list_${index}_${this.hashString(name)}`;
+          foundParticipants.set(id, { id, name, isSelf: false });
+        }
+      });
+    });
+
+    // Parse from name elements
+    const nameEls = document.querySelectorAll(this.selectors.nameElements);
+    nameEls.forEach((el, index) => {
+      const name = el.textContent?.trim();
+      if (name && name.length > 0 && name.length < 50 && !this.isSelfName(name)) {
+        const cleanedName = this.cleanName(name);
+        const id = `name_${index}_${this.hashString(cleanedName)}`;
+        if (!foundParticipants.has(id)) {
+          foundParticipants.set(id, { id, name: cleanedName, isSelf: false });
+        }
+      }
+    });
+
+    this.detectParticipantChanges(foundParticipants);
+    return this.getParticipantsArray();
+  }
+
+  extractNameFromElement(element) {
+    if (!element) return null;
+
+    // Check data attributes
+    const dataName = element.getAttribute('data-self-name') ||
+                    element.getAttribute('data-participant-name') ||
+                    element.getAttribute('aria-label');
+    
+    if (dataName) return this.cleanName(dataName);
+
+    // Search child elements
+    const nameEl = element.querySelector('[class*="ZjFb7c"], [class*="zWGUib"]');
+    if (nameEl?.textContent) return this.cleanName(nameEl.textContent);
+
+    // Fallback to text content
+    const text = element.textContent?.trim();
+    if (text && text.length > 0 && text.length < 50) {
+      return this.cleanName(text);
+    }
+
+    return null;
+  }
+
+  cleanName(name) {
+    if (!name) return null;
+
+    let cleaned = name
+      .replace(/\s*\(You\)\s*/gi, '')
+      .replace(/\s*\(Host\)\s*/gi, '')
+      .replace(/\s*\(Organizer\)\s*/gi, '')
+      .replace(/\s*\(Presenting\)\s*/gi, '')
+      .replace(/More actions/gi, '')
+      .replace(/More options/gi, '')
+      .replace(/Meeting host/gi, '')
+      .replace(/\bmore_vert\b/gi, '')
+      .replace(/\bmore_horiz\b/gi, '')
+      .replace(/\bdevices?\b/gi, '')
+      .replace(/\bmicrophone\b/gi, '')
+      .replace(/\bcamera\b/gi, '')
+      .replace(/\bpin\b/gi, '')
+      .replace(/\bremove\b/gi, '')
+      .replace(/\bmute\b/gi, '')
+      .replace(/\bpush_pin\b/gi, '')
+      .replace(/\bvolume_up\b/gi, '')
+      .replace(/\bvolume_off\b/gi, '')
+      .replace(/\bmic_off\b/gi, '')
+      .replace(/\bmic\b/gi, '')

@@ -198,3 +198,153 @@
   height: 100%;
   border-radius: 3px;
   transition: width 0.5s ease, background 0.3s;
+}
+
+.cs-confusion-rate {
+  font-size: 15px;
+  font-weight: 700;
+  min-width: 45px;
+  text-align: right;
+}
+
+/* Intervene button on student card (appears when student confirms confusion) */
+.cs-card-intervene-btn {
+  padding: 6px 10px;
+  background: #EF4444;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  animation: cs-flash 1s ease infinite;
+  white-space: nowrap;
+}
+.cs-card-intervene-btn:hover {
+  background: #DC2626;
+}
+@keyframes cs-flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.cs-card-intervening-label {
+  padding: 6px 10px;
+  background: rgba(74, 222, 128, 0.15);
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  border-radius: 6px;
+  color: #4ade80;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  animation: cs-flash 1.5s ease infinite;
+}
+
+/* Export/Download button */
+.cs-export-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  background: rgba(139, 92, 246, 0.15);
+  color: #8B5CF6;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.cs-export-btn:hover {
+  background: rgba(139, 92, 246, 0.3);
+  color: #fff;
+}
+
+/* ============================================
+   DASHBOARD BUBBLE (Minimized)
+   ============================================ */
+
+.cs-dashboard-bubble {
+  position: fixed; top: 80px; right: 20px;
+  width: 60px; height: 60px;
+  background: #000000; border-radius: 50%;
+  border: 2px solid #8B5CF6;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
+  transition: all 0.2s ease;
+  max-width: calc(100vw - 40px);
+}
+.cs-dashboard-bubble:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 24px rgba(139, 92, 246, 0.5);
+}
+.cs-bubble-logo { font-size: 14px; font-weight: 700; color: #8B5CF6; }
+.cs-bubble-rate { font-size: 11px; font-weight: 600; color: #fff; }
+
+/* ============================================
+   STUDENT STATUS WIDGET - matches wireframe
+   ============================================ */
+
+.cs-student-status {
+  position: fixed;
+  top: 80px;
+  left: 20px;
+  background: #000000;
+  border-radius: 12px;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  min-width: 240px;
+  max-width: calc(100vw - 40px);
+  overflow: hidden;
+}
+
+.cs-status-header {
+  padding: 12px 16px;
+  background: rgba(139, 92, 246, 0.05);
+  cursor: grab;
+}
+.cs-status-header:active { cursor: grabbing; }
+
+.cs-status-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cs-toggle-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+}
+.cs-toggle-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.cs-toggle-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cs-toggle-text {
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 22px;
+}
+.cs-toggle-text.cs-on { color: #8B5CF6; }
+.cs-toggle-text.cs-off { color: #6B7280; }
+
+/* iOS Toggle Switch */
+.cs-toggle-switch {
+  width: 44px; height: 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.3s ease;
