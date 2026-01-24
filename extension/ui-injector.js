@@ -548,3 +548,253 @@ class UIInjector {
       </div>
       <div class="cs-alert-body">
         <p><strong>${student.name}</strong> has exhibited a confusion rate above 70% for 20 seconds. Recommended intervention is advised.</p>
+      </div>
+      <div class="cs-alert-actions">
+        <button id="cs-intervene-btn" class="cs-alert-btn cs-btn-intervene">Intervene Now</button>
+        <button id="cs-dismiss-btn" class="cs-alert-btn cs-btn-dismiss">Dismiss for 5 mins</button>
+      </div>
+    `;
+
+    this.elements.container.appendChild(this.elements.alert);
+    this.state.alertVisible = true;
+
+    this.elements.alert.querySelector('#cs-intervene-btn')?.addEventListener('click', () => {
+      if (this.callbacks.onIntervene) this.callbacks.onIntervene(student);
+      this.hideTutorAlert();
+    });
+
+    this.elements.alert.querySelector('#cs-dismiss-btn')?.addEventListener('click', () => {
+      if (this.callbacks.onDismissAlert) this.callbacks.onDismissAlert(student, 300000);
+      this.hideTutorAlert();
+    });
+
+    this.elements.alert.querySelector('#cs-alert-close')?.addEventListener('click', () => this.hideTutorAlert());
+  }
+
+  hideTutorAlert() {
+    if (this.elements.alert) {
+      this.elements.alert.remove();
+      this.elements.alert = null;
+      this.state.alertVisible = false;
+    }
+  }
+
+  showAlert(student) { this.showTutorAlert(student); }
+  hideAlert() { this.hideTutorAlert(); }
+
+  // ==================== PDF & CSV REPORT GENERATION ====================
+
+  async generatePDFReport() {
+    // Show loading
+    const overlay = document.createElement('div');
+    overlay.className = 'cs-pdf-overlay';
+    overlay.innerHTML = `
+      <div class="cs-pdf-loading">
+        <div class="cs-pdf-loading-spinner"></div>
+        <div>Generating Session Report...</div>
+      </div>
+    `;
+    this.elements.container.appendChild(overlay);
+
+    try {
+      // Also export CSV with raw data
+      this._exportSessionCSV();
+      // Generate visual PDF
+      await this._buildAndDownloadPDF();
+    } catch (err) {
+      console.error('[ConfuSense] PDF generation error:', err);
+      this._exportSessionCSV(); // Fallback: at least give them the CSV
+    } finally {
+      overlay.remove();
+    }
+  }
+
+  _getStudentReportData() {
+    const studentMap = new Map();
+    const BUCKET_MS = 5 * 60 * 1000; // 5 minutes
+
+    // Gather all students from participants + sessionLog
+    this.participants.forEach(p => {
+      if (p.role === 'student') {
+        studentMap.set(p.id, {
+          id: p.id,
+          name: p.name,
+          currentRate: Math.round(p.confusionRate || 0),
+          readings: [],
+          events: [],
+          interventions: []
+        });
+      }
+    });
+
+    // Add data from sessionLog (real readings every ~10s)
+    this.sessionLog.forEach(entry => {
+      if (!studentMap.has(entry.studentId)) {
+        studentMap.set(entry.studentId, {
+          id: entry.studentId,
+          name: entry.studentName,
+          currentRate: entry.confusionRate,
+          readings: [],
+          events: [],
+          interventions: []
+        });
+      }
+      const student = studentMap.get(entry.studentId);
+      if (entry.intervention && entry.intervention !== 'None') {
+        student.interventions.push(entry);
+      } else {
+        student.readings.push(entry);
+      }
+    });
+
+    // Add intervention records
+    this.studentInterventions.forEach((interventions, studentId) => {
+      if (studentMap.has(studentId)) {
+        studentMap.get(studentId).interventions = interventions;
+      }
+    });
+
+    // Process each student: calculate overall rate + build 5-min bucket events
+    studentMap.forEach(student => {
+      // Overall confusion rate = average of ALL readings throughout the session
+      if (student.readings.length > 0) {
+        const sum = student.readings.reduce((s, r) => s + r.confusionRate, 0);
+        student.overallRate = Math.round(sum / student.readings.length);
+      } else {
+        student.overallRate = student.currentRate;
+      }
+
+      // Group readings into 5-minute time buckets
+      if (student.readings.length > 0) {
+        const buckets = new Map(); // bucketKey -> { readings[], startTime, interventionInBucket }
+
+        student.readings.forEach(reading => {
+          // Bucket key = floor to nearest 5 min from session start
+          const elapsed = reading.timestamp - this.sessionStartTime;
+          const bucketIndex = Math.floor(elapsed / BUCKET_MS);
+          const bucketStart = this.sessionStartTime + bucketIndex * BUCKET_MS;
+          const key = bucketIndex;
+
+          if (!buckets.has(key)) {
+            buckets.set(key, {
+              startTime: bucketStart,
+              endTime: bucketStart + BUCKET_MS,
+              readings: [],
+              hasIntervention: false,
+              interventionBy: null
+            });
+          }
+          buckets.get(key).readings.push(reading);
+        });
+
+        // Check which buckets had interventions
+        student.interventions.forEach(intv => {
+          const elapsed = intv.timestamp - this.sessionStartTime;
+          const bucketIndex = Math.floor(elapsed / BUCKET_MS);
+          if (buckets.has(bucketIndex)) {
+            buckets.get(bucketIndex).hasIntervention = true;
+            buckets.get(bucketIndex).interventionBy = intv.tutorName || intv.intervention || 'Tutor';
+          }
+        });
+
+        // Convert buckets to events: each bucket = one row in the report
+        student.events = [];
+        const sortedBuckets = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]);
+
+        sortedBuckets.forEach(([key, bucket]) => {
+          const avgRate = Math.round(
+            bucket.readings.reduce((s, r) => s + r.confusionRate, 0) / bucket.readings.length
+          );
+          // Duration = time span of actual readings in this bucket
+          const firstReading = bucket.readings[0].timestamp;
+          const lastReading = bucket.readings[bucket.readings.length - 1].timestamp;
+          const duration = Math.max(Math.round((lastReading - firstReading) / 1000), 10);
+
+          student.events.push({
+            timestamp: bucket.startTime,
+            endTimestamp: bucket.endTime,
+            rate: avgRate,
+            duration: duration,
+            intervention: bucket.hasIntervention ? 'Intervened' : 'None',
+            interventionBy: bucket.interventionBy
+          });
+        });
+      }
+
+      // Calculate total confusion time: sum of durations where avg rate >= 50
+      student.totalConfusionSec = student.events
+        .filter(e => e.rate >= 50)
+        .reduce((s, e) => s + (e.duration || 0), 0);
+    });
+
+    return Array.from(studentMap.values())
+      .sort((a, b) => b.overallRate - a.overallRate);
+  }
+
+  async _buildAndDownloadPDF() {
+    const students = this._getStudentReportData();
+
+    // If no students tracked, use current participants as fallback
+    if (students.length === 0) {
+      const fallback = this.participants.filter(p => p.role === 'student');
+      if (fallback.length === 0) {
+        console.warn('[ConfuSense] No student data to report');
+        return;
+      }
+      fallback.forEach(p => {
+        students.push({
+          id: p.id, name: p.name,
+          overallRate: Math.round(p.confusionRate || 0),
+          currentRate: Math.round(p.confusionRate || 0),
+          readings: [], events: [], interventions: [],
+          totalConfusionSec: 0
+        });
+      });
+    }
+
+    // Create offscreen HTML element for rendering
+    const reportDiv = document.createElement('div');
+    reportDiv.style.cssText = `
+      position: fixed; left: -9999px; top: 0;
+      width: 480px; font-family: 'Segoe UI', Arial, sans-serif;
+      background: #0a0a18; color: #fff; padding: 24px;
+    `;
+
+    // Build the report HTML matching wireframe
+    let html = `
+      <div style="text-align:center;font-size:20px;font-weight:bold;padding:12px 0 22px;color:#fff;">
+        Session Report
+      </div>
+    `;
+
+    students.forEach(student => {
+      const rate = student.overallRate;
+      const events = student.events.length > 0 ? student.events.slice(-5) : [];
+      const totalM = Math.floor(student.totalConfusionSec / 60);
+      const totalS = student.totalConfusionSec % 60;
+      const totalStr = `${totalM.toString().padStart(2, '0')}:${totalS.toString().padStart(2, '0')}`;
+
+      // SVG donut
+      const circumference = 2 * Math.PI * 21;
+      const dashoffset = circumference - (rate / 100) * circumference;
+
+      // Build event rows
+      let eventRowsHTML = '';
+      if (events.length > 0) {
+        events.forEach((ev, i) => {
+          // Show as time range (5-min bucket)
+          const tStart = new Date(ev.timestamp);
+          const tEnd = new Date(ev.endTimestamp || ev.timestamp + 300000);
+          const fmtTime = (d) => [d.getHours(), d.getMinutes()].map(v => v.toString().padStart(2, '0')).join(':');
+          const timeStr = `${fmtTime(tStart)} – ${fmtTime(tEnd)}`;
+          const evRate = ev.rate || rate;
+          const barWidth = Math.min(evRate, 100);
+          const hasIntervention = ev.intervention && ev.intervention !== 'None';
+          const statusColor = hasIntervention ? '#4ade80' : '#ef4444';
+          const statusText = hasIntervention
+            ? `Intervened (${ev.interventionBy || 'Tutor'})`
+            : (evRate >= 70 ? 'High' : evRate >= 50 ? 'Medium' : 'Low');
+
+          const rowBg = i % 2 === 1 ? 'background:rgba(60,60,140,0.15);' : '';
+          eventRowsHTML += `
+            <tr style="${rowBg}">

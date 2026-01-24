@@ -418,3 +418,183 @@ class ConfuSenseApp {
 
   isTutor() {
     return this.settings.role === 'tutor' || this.state.wasEverHost;
+  }
+
+  isStudent() {
+    return !this.isTutor();
+  }
+
+  isHostParticipant(participant) {
+    if (!participant) return false;
+    if (participant.isHost) return true;
+    
+    const hostName = this.domParser?.hostInfo?.name;
+    const selfName = this.domParser?.selfInfo?.name;
+    
+    if (this.isTutor() && selfName && participant.name === selfName) return true;
+    if (hostName && participant.name === hostName) return true;
+    
+    return false;
+  }
+
+  // ==================== MESSAGE LISTENERS ====================
+
+  setupMessageListeners() {
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+      switch (msg.type) {
+        case 'SETTINGS_UPDATE':
+          this.updateSettings(msg.settings);
+          sendResponse({ success: true });
+          break;
+        case 'GET_STATE':
+          sendResponse({
+            isInMeeting: this.state.isInMeeting,
+            role: this.settings.role,
+            enabled: this.settings.enabled,
+            socketConnected: this.state.socketConnected,
+            participants: this.getActiveStudentsArray()
+          });
+          break;
+        case 'SET_ROLE':
+          this.setRole(msg.role);
+          sendResponse({ success: true });
+          break;
+        default:
+          sendResponse({ success: true });
+      }
+      return true;
+    });
+  }
+
+  startMeetingDetection() {
+    this.domParser?.init();
+  }
+
+  updateSettings(newSettings) {
+    const wasEnabled = this.settings.enabled;
+    const wasRole = this.settings.role;
+    
+    this.settings = { ...this.settings, ...newSettings };
+    this.saveSettings();
+    
+    if (newSettings.enabled !== undefined && newSettings.enabled !== wasEnabled) {
+      this.toggleDetection(newSettings.enabled);
+    }
+    
+    if (newSettings.role !== undefined && newSettings.role !== wasRole) {
+      this.setRole(newSettings.role);
+    }
+  }
+
+  toggleDetection(enabled) {
+    this.settings.enabled = enabled;
+    
+    if (enabled && this.state.isInMeeting && this.settings.role === 'student') {
+      if (this.detector) {
+        this.startDetection();
+      }
+    } else if (this.detector) {
+      this.detector.stop();
+    }
+  }
+
+  onToggleDetection(enabled) {
+    console.log('[ConfuSense] Student toggled:', enabled);
+    this.settings.enabled = enabled;
+    this.saveSettings();
+    this.sendStatusUpdate(enabled);
+
+    // Start/stop student simulation when toggling detection
+    if (this.isStudent()) {
+      if (enabled) {
+        this.startStudentSimulation();
+      } else {
+        this.stopStudentSimulation();
+      }
+    }
+  }
+
+  setRole(role) {
+    console.log('[ConfuSense] Setting role:', role);
+    this.settings.role = role;
+    
+    if (role === 'tutor') {
+      this.state.wasEverHost = true;
+    }
+    
+    this.saveSettings();
+    
+    if (this.state.isInMeeting) {
+      if (role === 'tutor') {
+        this.setupTutorUI();
+      } else {
+        this.setupStudentUI();
+      }
+    }
+  }
+
+  setupTutorUI() {
+    console.log('[ConfuSense] Setting up TUTOR UI');
+    
+    if (this.detector) this.detector.stop();
+    
+    this.ui?.hideStudentPopup();
+    this.ui?.hideStudentStatus();
+    
+    this.ui?.showDashboard(this.getActiveStudentsArray());
+
+    this.startSimulation();
+    this.startSyncInterval();
+  }
+
+  setupStudentUI() {
+    console.log('[ConfuSense] Setting up STUDENT UI');
+
+    this.ui?.hideDashboard();
+    this.ui?.hideTutorAlert();
+    this.stopSimulation();
+    this.stopSyncInterval();
+    this.stopStudentSimulation();
+
+    this.ui?.showStudentStatus(this.settings.enabled);
+
+    if (this.settings.enabled && this.detector) {
+      this.startDetection();
+    }
+
+    // Start student-side confusion simulation (works alongside or as fallback to real detector)
+    if (this.settings.enabled) {
+      this.startStudentSimulation();
+    }
+
+    // Send initial status
+    setTimeout(() => {
+      this.sendStatusUpdate(this.settings.enabled);
+    }, 1000);
+  }
+
+  async startDetection() {
+    if (!this.detector) return;
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.autoplay = true;
+      video.style.display = 'none';
+      document.body.appendChild(video);
+      
+      await this.detector.initialize();
+      this.detector.start(video);
+    } catch (e) {
+      console.warn('[ConfuSense] Detection start failed:', e.message);
+    }
+  }
+
+  // ==================== SIMULATION ====================
+
+  startSimulation() {
+    if (this.simulationInterval) return;
+    
+    this.simulationInterval = setInterval(() => {
+      this.state.activeStudents.forEach(student => {
