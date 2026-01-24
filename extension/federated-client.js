@@ -163,3 +163,28 @@ class ConfuSenseFLClient {
     let l2Norm = 0;
     gradients.forEach(g => { l2Norm += g * g; });
     l2Norm = Math.sqrt(l2Norm);
+    const clipFactor = Math.min(1.0, this.options.dpL2NormClip / (l2Norm + 1e-10));
+    return gradients.map(g => g * clipFactor);
+  }
+
+  gaussianNoise() {
+    const u1 = Math.random();
+    const u2 = Math.random();
+    return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  }
+
+  calculateMetrics(X, y) {
+    let correct = 0;
+    const predictions = X.map(x => this.predict(x));
+    
+    for (let i = 0; i < y.length; i++) {
+      if (predictions[i] === y[i]) correct++;
+    }
+
+    return {
+      accuracy: correct / y.length,
+      numSamples: y.length,
+      loss: 1 - (correct / y.length)
+    };
+  }
+
