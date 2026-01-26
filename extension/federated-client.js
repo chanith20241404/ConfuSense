@@ -188,3 +188,23 @@ class ConfuSenseFLClient {
     };
   }
 
+  predict(features) {
+    const sum = features.reduce((acc, f) => acc + f, 0);
+    const avg = sum / features.length;
+    return avg > 0.5 ? 1 : 0;
+  }
+
+  async submitUpdate(update) {
+    try {
+      const response = await fetch(`${this.options.serverUrl}/api/fl/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(update)
+      });
+
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+      const result = await response.json();
+      console.log('[ConfuSense FL] Update submitted:', result);
+
+      if (result.newModel) this.updateLocalModel(result.newModel);
