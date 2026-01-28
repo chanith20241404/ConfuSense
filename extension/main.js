@@ -598,3 +598,253 @@ class ConfuSenseApp {
     
     this.simulationInterval = setInterval(() => {
       this.state.activeStudents.forEach(student => {
+        const change = (Math.random() - 0.5) * 10;
+        student.confusionRate = Math.max(0, Math.min(100, (student.confusionRate || 50) + change));
+      });
+      
+      if (this.isTutor()) {
+        this.ui?.updateDashboard(this.getActiveStudentsArray());
+      }
+    }, 3000);
+  }
+
+  stopSimulation() {
+    if (this.simulationInterval) {
+      clearInterval(this.simulationInterval);
+      this.simulationInterval = null;
+    }
+  }
+
+  // ==================== STUDENT CONFUSION SIMULATION ====================
+
+  startStudentSimulation() {
+    if (this.studentSimInterval) return;
+    if (!this.isStudent()) return;
+
+    this.confusionHistory = [];  // rolling window of { timestamp, score }
+    this.studentConfusionScore = Math.floor(Math.random() * 40) + 30; // start 30-70
+
+    console.log('[ConfuSense] Starting student confusion simulation');
+
+    this.studentSimInterval = setInterval(() => {
+      if (!this.settings.enabled) return;
+
+      // Generate a random confusion score with drift
+      const change = (Math.random() - 0.45) * 15; // slight upward bias
+      this.studentConfusionScore = Math.max(0, Math.min(100, this.studentConfusionScore + change));
+      const score = Math.round(this.studentConfusionScore);
+      const now = Date.now();
+
+      // Store in rolling history
+      this.confusionHistory.push({ timestamp: now, score });
+
+      // Keep only last 20 seconds of history
+      const windowStart = now - 20000;
+      this.confusionHistory = this.confusionHistory.filter(e => e.timestamp >= windowStart);
+
+      // Send confusion_update to server so tutor sees the rate
+      const selfName = this.domParser?.selfInfo?.name;
+      if (selfName && this.socket && this.socket.connected) {
+        this.socket.emit('confusion_update', {
+          meeting_id: this.state.meetingId,
+          participant_id: this.state.selfParticipantId,
+          participant_name: selfName,
+          confusion_rate: score
+        });
+      }
+
+      // Calculate 20-second rolling average
+      const avg = this.confusionHistory.reduce((sum, e) => sum + e.score, 0) / this.confusionHistory.length;
+
+      // Check if average exceeds threshold (70%) over the 20s window
+      // Only trigger if we have enough data points (at least 6 readings ≈ 18 seconds)
+      if (avg > 70 && this.confusionHistory.length >= 6) {
+        this.triggerConfusionAlert(score, avg);
+      }
+    }, 3000);
+  }
+
+  triggerConfusionAlert(currentScore, average) {
+    // Skip if in intervention cooldown
+    if (this.state.interventionCooldownUntil && Date.now() < this.state.interventionCooldownUntil) {
+      console.log('[ConfuSense] Suppressing alert — intervention cooldown active');
+      return;
+    }
+
+    // Skip if popup is already showing
+    if (this.ui?.state?.popupVisible) return;
+
+    // Skip if alert was recently shown (minimum 30s gap)
+    if (this._lastAlertTime && Date.now() - this._lastAlertTime < 30000) return;
+
+    console.log(`[ConfuSense] Confusion alert triggered — avg: ${Math.round(average)}%, current: ${currentScore}%`);
+    this._lastAlertTime = Date.now();
+
+    // Store current score for the confirmation event
+    this._lastConfusionScore = currentScore;
+
+    this.ui?.showStudentPopup((confirmed, timeout) => {
+      this.onPopupResponse(confirmed, timeout);
+    });
+  }
+
+  stopStudentSimulation() {
+    if (this.studentSimInterval) {
+      clearInterval(this.studentSimInterval);
+      this.studentSimInterval = null;
+    }
+    this.confusionHistory = [];
+  }
+
+  startSyncInterval() {
+    if (this.syncInterval) return;
+    
+    this.syncInterval = setInterval(() => {
+      this.syncParticipantsFromDOM();
+    }, 5000);
+  }
+
+  stopSyncInterval() {
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
+      this.syncInterval = null;
+    }
+  }
+
+  syncParticipantsFromDOM() {
+    if (!this.domParser) return;
+    
+    const domParticipants = this.domParser.parseAllParticipants();
+    
+    domParticipants.forEach(p => {
+      if (this.isHostParticipant(p)) return;
+      
+      if (!this.state.participants.has(p.id)) {
+        const newParticipant = {
+          ...p,
+          role: 'student',
+          confusionRate: Math.floor(Math.random() * 40) + 30,
+          detectionEnabled: true
+        };
+        this.state.participants.set(p.id, newParticipant);
+      }
+    });
+  }
+
+  // ==================== EVENT HANDLERS ====================
+
+  onMeetingStart(data) {
+    console.log('[ConfuSense] Meeting started:', data.meetingId);
+
+    this.state.isInMeeting = true;
+    this.state.meetingId = data.meetingId;
+    this.state.sessionStartTime = Date.now();
+    this.state.nameResolved = false;
+    this.state.hasJoinedRoom = false;
+    this.state.selfParticipantId = 'p_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+
+    this.ui?.init();
+    this.logEvent('SESSION_START', { meetingId: data.meetingId });
+
+    try {
+      chrome.runtime.sendMessage({ type: 'SESSION_START', meetingId: data.meetingId });
+    } catch (e) {}
+
+    const isHost = data.self?.isHost || this.domParser?.isSelfHost();
+    console.log('[ConfuSense] Am I host?', isHost);
+
+    // Connect WebSocket (non-blocking)
+    this.connectWebSocket();
+
+    // Set role and show UI immediately (non-blocking)
+    if (isHost) {
+      this.setRole('tutor');
+    } else {
+      this.setRole('student');
+    }
+
+    // Start background name resolution — retries until name is found,
+    // then joins the room and sends status with the real name
+    this.startNameResolution();
+  }
+
+  startNameResolution() {
+    // If name already available, send immediately
+    if (this.domParser?.selfInfo?.name) {
+      this.state.nameResolved = true;
+      console.log('[ConfuSense] Name already available:', this.domParser.selfInfo.name);
+      return;
+    }
+
+    console.log('[ConfuSense] Starting background name resolution...');
+    let attempts = 0;
+
+    this.nameResolveInterval = setInterval(() => {
+      attempts++;
+      this.domParser?.identifySelf();
+
+      let name = this.domParser?.selfInfo?.name;
+
+      // Fallback: after 5 failed attempts, try to extract name from video tiles
+      if (!name && attempts >= 5) {
+        name = this.extractSelfNameFallback();
+        if (name) {
+          this.domParser._setSelfInfo(name);
+          console.log('[ConfuSense] Name found via fallback:', name);
+        }
+      }
+
+      if (name) {
+        console.log('[ConfuSense] ✓ Name resolved on attempt', attempts, ':', name);
+        this.state.nameResolved = true;
+        clearInterval(this.nameResolveInterval);
+        this.nameResolveInterval = null;
+
+        // Now that we have a name, join room and send status
+        if (!this.state.hasJoinedRoom) {
+          this.joinMeetingRoom();
+        }
+        if (this.isStudent()) {
+          this.sendStatusUpdate(this.settings.enabled);
+        }
+      } else if (attempts >= 60) {
+        console.warn('[ConfuSense] Could not resolve name after 60 attempts');
+        clearInterval(this.nameResolveInterval);
+        this.nameResolveInterval = null;
+      }
+    }, 2000);
+  }
+
+  /**
+   * Fallback name extraction: scrapes name from Google Meet's video tile name labels.
+   * Finds the name shown on the self video by looking for name elements
+   * that are NOT other known participants and NOT the host.
+   */
+  extractSelfNameFallback() {
+    const nameEls = document.querySelectorAll('[class*="ZjFb7c"], [class*="zWGUib"]');
+    const hostName = this.domParser?.hostInfo?.name;
+    const knownNames = new Set();
+
+    // Collect known participant names
+    this.state.participants.forEach(p => knownNames.add(p.name));
+    this.state.activeStudents.forEach(s => knownNames.add(s.name));
+    if (hostName) knownNames.add(hostName);
+
+    for (const el of nameEls) {
+      const raw = el.textContent?.trim();
+      if (!raw || raw.length < 2) continue;
+
+      const name = this.domParser?.cleanName(raw);
+      if (!name || name.length < 2) continue;
+
+      // Skip "You" standalone
+      if (name === 'You' || name === 'you') continue;
+      // Skip known other participants
+      if (knownNames.has(name)) continue;
+      // Skip host name
+      if (name === hostName) continue;
+
+      // This is likely our self name
+      console.log('[ConfuSense] Fallback found candidate name:', name);
+      return name;
+    }

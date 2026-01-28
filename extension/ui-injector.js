@@ -798,3 +798,303 @@ class UIInjector {
           const rowBg = i % 2 === 1 ? 'background:rgba(60,60,140,0.15);' : '';
           eventRowsHTML += `
             <tr style="${rowBg}">
+              <td style="padding:5px 6px;color:#d0d0e8;font-size:10px;">${timeStr}</td>
+              <td style="padding:5px 6px;color:#d0d0e8;font-size:10px;">${evRate}%</td>
+              <td style="padding:5px 6px;">
+                <div style="width:70px;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
+                  <div style="width:${barWidth}%;height:100%;border-radius:3px;background:linear-gradient(to right,#6366f1,#8b5cf6);"></div>
+                </div>
+              </td>
+              <td style="padding:5px 6px;color:${statusColor};font-size:9px;">${statusText}</td>
+            </tr>
+          `;
+        });
+      } else {
+        // No events recorded yet - show message
+        eventRowsHTML = `
+          <tr>
+            <td colspan="4" style="padding:8px 6px;color:#8888a8;font-size:10px;text-align:center;">
+              No confusion events recorded during session
+            </td>
+          </tr>
+        `;
+      }
+
+      // Number of readings and interventions
+      const readingCount = student.readings.length;
+      const interventionCount = student.interventions.length;
+
+      html += `
+        <div style="background:rgba(75,70,180,0.25);border:1.5px solid rgba(100,100,230,0.45);border-radius:14px;padding:18px;margin-bottom:24px;">
+          <div style="font-size:15px;font-weight:bold;color:#fff;">Student : ${student.name}</div>
+          <div style="font-size:11px;color:#a0a0c0;margin-top:4px;">Overall Confusion Rate</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+            <div style="font-size:38px;font-weight:bold;color:#fff;">${rate}%</div>
+            <svg width="52" height="52" viewBox="0 0 52 52" style="transform:rotate(-90deg);">
+              <circle cx="26" cy="26" r="21" fill="none" stroke="rgba(180,40,40,0.25)" stroke-width="6"/>
+              <circle cx="26" cy="26" r="21" fill="none" stroke="#dc2626" stroke-width="6"
+                stroke-linecap="round" stroke-dasharray="${circumference.toFixed(2)}" stroke-dashoffset="${dashoffset.toFixed(2)}"/>
+            </svg>
+          </div>
+          <div style="font-size:11px;font-weight:bold;color:#fff;margin-top:16px;">Confusion Events Log</div>
+          <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+            <thead>
+              <tr style="background:rgba(60,60,140,0.45);">
+                <th style="color:#c0c0d8;font-size:8px;font-weight:bold;text-align:left;padding:4px 6px;">Time Period</th>
+                <th style="color:#c0c0d8;font-size:8px;font-weight:bold;text-align:left;padding:4px 6px;">Avg Rate</th>
+                <th style="color:#c0c0d8;font-size:8px;font-weight:bold;text-align:left;padding:4px 6px;">Confusion Level</th>
+                <th style="color:#c0c0d8;font-size:8px;font-weight:bold;text-align:left;padding:4px 6px;">Intervention Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${eventRowsHTML}
+            </tbody>
+          </table>
+          <div style="color:#8888a8;font-size:10px;margin-top:10px;">
+            Total Confusion Time - ${totalStr}(min:sec) | Readings: ${readingCount} | Interventions: ${interventionCount}
+          </div>
+        </div>
+      `;
+    });
+
+    reportDiv.innerHTML = html;
+    document.body.appendChild(reportDiv);
+
+    // Render HTML to canvas
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const width = 480;
+      const height = reportDiv.scrollHeight;
+      canvas.width = width * 2;  // 2x for clarity
+      canvas.height = height * 2;
+      ctx.scale(2, 2);
+
+      // Draw background
+      ctx.fillStyle = '#0a0a18';
+      ctx.fillRect(0, 0, width, height);
+
+      // Use SVG foreignObject to render HTML into canvas
+      const svgData = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+          <foreignObject width="100%" height="100%">
+            <div xmlns="http://www.w3.org/1999/xhtml">
+              ${reportDiv.innerHTML}
+            </div>
+          </foreignObject>
+        </svg>
+      `;
+
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => {
+          console.warn('[ConfuSense] SVG render failed, falling back to canvas draw');
+          reject(new Error('SVG render failed'));
+        };
+        img.src = svgUrl;
+      });
+
+      ctx.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(svgUrl);
+      reportDiv.remove();
+
+      this._downloadCanvasAsPDF(canvas, `ConfuSense_Session_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (svgErr) {
+      console.warn('[ConfuSense] SVG approach failed, using canvas fallback:', svgErr);
+      reportDiv.remove();
+      // Fallback: use manual canvas rendering
+      await this._buildPDFCanvasFallback(students);
+    }
+  }
+
+  async _buildPDFCanvasFallback(students) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    // 3x resolution for crisp PDF output
+    const SCALE = 3;
+    const W = 520;
+    const PAD = 28;
+    const CARD_PAD = 22;
+    const CARD_GAP = 28;
+    const CARD_W = W - PAD * 2;
+    const ROW_H = 28;
+    const TITLE_AREA = 110;  // more room for title + session info
+
+    // Calculate height dynamically
+    let totalH = TITLE_AREA;
+    students.forEach(s => {
+      const eventCount = Math.max(Math.min(s.events.length, 8), 1);
+      const cardH = 170 + eventCount * ROW_H + 36;
+      totalH += cardH + CARD_GAP;
+    });
+    totalH += PAD * 2;
+
+    canvas.width = W * SCALE;
+    canvas.height = Math.max(totalH, 500) * SCALE;
+    ctx.scale(SCALE, SCALE);
+
+    // Enable font smoothing
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    // ── Background ──
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, totalH);
+    bgGrad.addColorStop(0, '#0c0c20');
+    bgGrad.addColorStop(0.5, '#080818');
+    bgGrad.addColorStop(1, '#060612');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, totalH);
+
+    // Top glow
+    const topGlow = ctx.createRadialGradient(W / 2, 0, 20, W / 2, 0, W * 0.7);
+    topGlow.addColorStop(0, 'rgba(90, 80, 240, 0.15)');
+    topGlow.addColorStop(0.5, 'rgba(60, 60, 180, 0.06)');
+    topGlow.addColorStop(1, 'transparent');
+    ctx.fillStyle = topGlow;
+    ctx.fillRect(0, 0, W, 250);
+
+    // ── ConfuSense branding ──
+    ctx.fillStyle = '#8b5cf6';
+    ctx.font = 'bold 11px Segoe UI, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('ConfuSense', W / 2, 24);
+
+    // ── Title ──
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 22px Segoe UI, sans-serif';
+    ctx.fillText('Session Report', W / 2, 52);
+
+    // ── Session info line ──
+    const sessionDate = new Date().toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+    const sessionDur = this.formatTime(this.sessionTime);
+    ctx.fillStyle = '#7878a0';
+    ctx.font = '10px Segoe UI, sans-serif';
+    ctx.fillText(`${sessionDate}  ·  Duration: ${sessionDur}  ·  ${students.length} Student${students.length !== 1 ? 's' : ''}`, W / 2, 72);
+
+    // Thin separator line
+    ctx.strokeStyle = 'rgba(100, 100, 220, 0.2)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(PAD + 30, 85);
+    ctx.lineTo(W - PAD - 30, 85);
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    let y = TITLE_AREA;
+
+    students.forEach((student) => {
+      const rate = student.overallRate;
+      const events = student.events.slice(-8);
+      const eventCount = Math.max(Math.min(events.length, 8), 1);
+      const CARD_H = 170 + eventCount * ROW_H + 36;
+      const cx = PAD;
+
+      // ── Card shadow ──
+      ctx.shadowColor = 'rgba(80, 70, 200, 0.15)';
+      ctx.shadowBlur = 12;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 4;
+
+      // ── Card background gradient ──
+      const cardGrad = ctx.createLinearGradient(cx, y, cx, y + CARD_H);
+      cardGrad.addColorStop(0, 'rgba(80, 75, 190, 0.3)');
+      cardGrad.addColorStop(1, 'rgba(50, 45, 140, 0.18)');
+      ctx.fillStyle = cardGrad;
+      ctx.strokeStyle = 'rgba(110, 110, 240, 0.4)';
+      ctx.lineWidth = 1;
+      this._roundRect(ctx, cx, y, CARD_W, CARD_H, 16);
+
+      // Reset shadow
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+
+      // ── Inner glow at top of card ──
+      const innerGlow = ctx.createLinearGradient(cx, y, cx, y + 60);
+      innerGlow.addColorStop(0, 'rgba(120, 110, 255, 0.08)');
+      innerGlow.addColorStop(1, 'transparent');
+      ctx.fillStyle = innerGlow;
+      ctx.fillRect(cx + 1, y + 1, CARD_W - 2, 58);
+
+      // ── "Student : Name" ──
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 16px Segoe UI, sans-serif';
+      ctx.fillText(`Student : ${student.name}`, cx + CARD_PAD, y + 30);
+
+      // ── "Overall Confusion Rate" ──
+      ctx.fillStyle = '#9898b8';
+      ctx.font = '11px Segoe UI, sans-serif';
+      ctx.fillText('Overall Confusion Rate', cx + CARD_PAD, y + 50);
+
+      // ── Big percentage ──
+      const rateColor = rate >= 70 ? '#f87171' : rate >= 50 ? '#fbbf24' : '#4ade80';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 42px Segoe UI, sans-serif';
+      ctx.fillText(`${rate}%`, cx + CARD_PAD, y + 100);
+
+      // ── Donut ring (right side) ──
+      const donutX = cx + CARD_W - 56;
+      const donutY = y + 74;
+      const donutR = 28;
+      const donutWidth = 7;
+
+      // Track background
+      ctx.beginPath();
+      ctx.arc(donutX, donutY, donutR, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(200, 50, 50, 0.15)';
+      ctx.lineWidth = donutWidth;
+      ctx.stroke();
+
+      // Progress arc
+      ctx.beginPath();
+      const startAngle = -Math.PI / 2;
+      const endAngle = startAngle + (rate / 100) * Math.PI * 2;
+      ctx.arc(donutX, donutY, donutR, startAngle, endAngle);
+      const donutGrad = ctx.createLinearGradient(donutX - donutR, donutY - donutR, donutX + donutR, donutY + donutR);
+      donutGrad.addColorStop(0, '#ef4444');
+      donutGrad.addColorStop(1, '#dc2626');
+      ctx.strokeStyle = donutGrad;
+      ctx.lineWidth = donutWidth;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+
+      // Rate text inside donut
+      ctx.fillStyle = rateColor;
+      ctx.font = 'bold 12px Segoe UI, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${rate}%`, donutX, donutY + 4);
+      ctx.textAlign = 'left';
+
+      // ── Divider line ──
+      ctx.strokeStyle = 'rgba(100, 100, 220, 0.15)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(cx + CARD_PAD, y + 115);
+      ctx.lineTo(cx + CARD_W - CARD_PAD, y + 115);
+      ctx.stroke();
+
+      // ── "Confusion Events Log" ──
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 12px Segoe UI, sans-serif';
+      ctx.fillText('Confusion Events Log', cx + CARD_PAD, y + 132);
+
+      // ── Table header ──
+      const tblX = cx + CARD_PAD;
+      const tblW = CARD_W - CARD_PAD * 2;
+      const tblY = y + 142;
+
+      // Header background with rounded top corners
+      ctx.fillStyle = 'rgba(55, 55, 150, 0.5)';
+      this._roundRectFill(ctx, tblX, tblY, tblW, 22, 6, true, false);
+
+      ctx.fillStyle = '#b8b8d8';
+      ctx.font = 'bold 9px Segoe UI, sans-serif';
+      const cols = [0, 100, 155, 290];
+      ctx.fillText('Time Period', tblX + cols[0] + 8, tblY + 15);
