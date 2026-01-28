@@ -208,3 +208,23 @@ class ConfuSenseFLClient {
       console.log('[ConfuSense FL] Update submitted:', result);
 
       if (result.newModel) this.updateLocalModel(result.newModel);
+
+      return result;
+
+    } catch (error) {
+      console.error('[ConfuSense FL] Submit error:', error);
+      this.pendingUpdates = this.pendingUpdates || [];
+      this.pendingUpdates.push(update);
+      return null;
+    }
+  }
+
+  async syncWithServer() {
+    try {
+      const response = await fetch(
+        `${this.options.serverUrl}/api/fl/model/global?version=${this.globalModelVersion}`
+      );
+
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+      const result = await response.json();
