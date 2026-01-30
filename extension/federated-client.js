@@ -228,3 +228,23 @@ class ConfuSenseFLClient {
       if (!response.ok) throw new Error(`Server returned ${response.status}`);
 
       const result = await response.json();
+      
+      if (result.model && result.model.version > this.globalModelVersion) {
+        this.updateLocalModel(result.model);
+        console.log('[ConfuSense FL] Synced to model version:', result.model.version);
+      }
+
+      this.lastSyncTime = Date.now();
+      if (this.onSyncComplete) this.onSyncComplete(result);
+
+      return result;
+
+    } catch (error) {
+      console.warn('[ConfuSense FL] Sync failed:', error.message);
+      return null;
+    }
+  }
+
+  updateLocalModel(model) {
+    this.localModel = this.cloneWeights(model.weights);
+    this.globalModelVersion = model.version;
