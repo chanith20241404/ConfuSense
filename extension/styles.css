@@ -348,3 +348,133 @@
   cursor: pointer;
   position: relative;
   transition: background 0.3s ease;
+}
+.cs-toggle-switch.on { background: #8B5CF6; }
+.cs-toggle-switch.off { background: #374151; }
+.cs-toggle-knob {
+  position: absolute; top: 2px;
+  width: 20px; height: 20px;
+  background: #fff; border-radius: 50%;
+  transition: left 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+.cs-toggle-switch.on .cs-toggle-knob { left: 22px; }
+.cs-toggle-switch.off .cs-toggle-knob { left: 2px; }
+
+.cs-status-info {
+  font-size: 12px;
+  color: #9CA3AF;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.cs-status-buttons { display: flex; gap: 8px; }
+.cs-link-btn {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: transparent;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.cs-link-btn:hover { background: rgba(255,255,255,0.08); }
+.cs-link-btn.cs-primary {
+  background: #8B5CF6;
+  border-color: #8B5CF6;
+}
+.cs-link-btn.cs-primary:hover { background: #7C3AED; }
+
+/* ============================================
+   STUDENT CONFIRMATION POPUP - matches wireframe
+   ============================================ */
+
+.cs-popup {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 340px;
+  max-width: calc(100vw - 40px);
+  background: #000000;
+  border-radius: 16px;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  animation: cs-popup-bounce 0.4s ease-out;
+  overflow: hidden;
+}
+
+@keyframes cs-popup-bounce {
+  0% { opacity: 0; transform: translate(-50%,-50%) scale(0.9); }
+  50% { transform: translate(-50%,-50%) scale(1.02); }
+  100% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+}
+
+.cs-popup-header {
+  padding: 12px 16px;
+}
+.cs-popup-body {
+  padding: 20px 24px 24px;
+  text-align: center;
+}
+.cs-popup-emoji {
+  font-size: 28px;
+  display: inline;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.cs-popup-message {
+  color: #ffffff;
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 0;
+  display: inline;
+}
+.cs-popup-actions {
+  display: flex;
+  gap: 16px;
+  padding: 16px 24px 20px;
+}
+.cs-popup-btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+.cs-btn-yes {
+  background: #8B5CF6;
+  color: #fff;
+}
+.cs-btn-yes:hover {
+  background: #7C3AED;
+}
+.cs-btn-no {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #9ca3af;
+}
+.cs-btn-no:hover {
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+}
+
+/* ============================================
+   SUSTAINED CONFUSION ALERT - matches wireframe
+   Red-tinted with Intervene Now / Dismiss buttons
+   ============================================ */
+
+.cs-alert {
+  position: fixed;
+  bottom: 100px;
+  right: 20px;
+  width: 320px;
+  max-width: calc(100vw - 40px);
+  background: linear-gradient(180deg, rgba(60, 0, 0, 0.95), rgba(20, 0, 0, 0.98));
+  border-radius: 14px;
+  border: 1px solid rgba(239, 68, 68, 0.5);
