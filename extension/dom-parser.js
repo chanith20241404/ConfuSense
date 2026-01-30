@@ -448,3 +448,103 @@ class DOMParser {
       .replace(/\bvolume_off\b/gi, '')
       .replace(/\bmic_off\b/gi, '')
       .replace(/\bmic\b/gi, '')
+      .replace(/\bvideocam\b/gi, '')
+      .replace(/\bvideocam_off\b/gi, '')
+      .replace(/\bperson\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Handle duplicated full names (e.g., "Chanith VithanawasamChanith Vithanawasam" -> "Chanith Vithanawasam")
+    // Only match exact duplicates (rest must equal the candidate, not just start with it)
+    if (cleaned.length >= 6) {
+      for (let len = Math.ceil(cleaned.length / 2); len >= 2; len--) {
+        const candidate = cleaned.substring(0, len).trim();
+        const rest = cleaned.substring(len).trim();
+        if (candidate.length >= 2 && rest.toLowerCase() === candidate.toLowerCase()) {
+          cleaned = candidate;
+          break;
+        }
+      }
+    }
+
+    return cleaned.length >= 2 ? cleaned : null;
+  }
+
+  isSelfName(name) {
+    if (!this.selfInfo || !name) return false;
+    const cleanedName = this.cleanName(name);
+    return cleanedName === this.selfInfo.name || cleanedName === 'You' || name.includes('(You)');
+  }
+
+  detectParticipantChanges(newParticipants) {
+    // Check for new participants
+    newParticipants.forEach((participant, id) => {
+      const existingByName = this.findParticipantByName(participant.name);
+      
+      if (!existingByName) {
+        const newParticipant = {
+          ...participant,
+          role: 'student',
+          confusionRate: 0,
+          joinedAt: Date.now()
+        };
+        
+        this.participants.set(id, newParticipant);
+        console.log('[ConfuSense DOM] Participant joined:', participant.name);
+        
+        if (this.callbacks.onParticipantJoin) {
+          this.callbacks.onParticipantJoin(newParticipant);
+        }
+      }
+    });
+
+    // Check for participants who left
+    const currentNames = new Set(Array.from(newParticipants.values()).map(p => p.name));
+
+    this.participants.forEach((participant, id) => {
+      if (!currentNames.has(participant.name) && !participant.isSelf) {
+        console.log('[ConfuSense DOM] Participant left:', participant.name);
+        
+        if (this.callbacks.onParticipantLeave) {
+          this.callbacks.onParticipantLeave(participant);
+        }
+        
+        this.participants.delete(id);
+      }
+    });
+  }
+
+  findParticipantByName(name) {
+    for (const [id, participant] of this.participants) {
+      if (participant.name === name) return participant;
+    }
+    return null;
+  }
+
+  setupObservers() {
+    const observer = new MutationObserver((mutations) => {
+      let shouldReparse = false;
+      
+      mutations.forEach(mutation => {
+        if (mutation.type === 'childList' && 
+            (mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0)) {
+          shouldReparse = true;
+        }
+      });
+
+      if (shouldReparse) {
+        this.debouncedParse();
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    this.observers.push(observer);
+  }
+
+  debouncedParse() {
+    if (this.parseTimeout) clearTimeout(this.parseTimeout);
+    
