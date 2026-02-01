@@ -548,3 +548,62 @@ class DOMParser {
   debouncedParse() {
     if (this.parseTimeout) clearTimeout(this.parseTimeout);
     
+    this.parseTimeout = setTimeout(() => {
+      this.detectMeetingState();
+      if (this.isInMeeting) {
+        if (!this.selfInfo?.name) this.identifySelf();
+        this.parseAllParticipants();
+        this.identifyHost();
+      }
+    }, 500);
+  }
+
+  startPeriodicCheck() {
+    this.checkInterval = setInterval(() => {
+      this.detectMeetingState();
+      if (this.isInMeeting) {
+        if (!this.selfInfo?.name) this.identifySelf();
+        this.parseAllParticipants();
+        this.identifyHost();
+      }
+    }, 5000);
+  }
+
+  getParticipantsArray() {
+    return Array.from(this.participants.values());
+  }
+
+  getStudents() {
+    return this.getParticipantsArray().filter(p => p.role === 'student');
+  }
+
+  setParticipantRole(participantId, role) {
+    const participant = this.participants.get(participantId);
+    if (participant) participant.role = role;
+  }
+
+  updateConfusionRate(participantId, rate) {
+    const participant = this.participants.get(participantId);
+    if (participant) {
+      participant.confusionRate = rate;
+      participant.lastConfusionUpdate = Date.now();
+    }
+  }
+
+  hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+  }
+
+  destroy() {
+    this.observers.forEach(obs => obs.disconnect());
+    if (this.checkInterval) clearInterval(this.checkInterval);
+    if (this.parseTimeout) clearTimeout(this.parseTimeout);
+  }
+}
+
+window.ConfuSenseDOMParser = DOMParser;
