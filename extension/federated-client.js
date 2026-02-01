@@ -248,3 +248,23 @@ class ConfuSenseFLClient {
   updateLocalModel(model) {
     this.localModel = this.cloneWeights(model.weights);
     this.globalModelVersion = model.version;
+    if (this.onModelUpdated) this.onModelUpdated(model);
+  }
+
+  cloneWeights(weights) {
+    return JSON.parse(JSON.stringify(weights));
+  }
+
+  startPeriodicSync() {
+    this.syncInterval = setInterval(() => this.syncWithServer(), this.options.syncInterval);
+  }
+
+  stopPeriodicSync() {
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
+      this.syncInterval = null;
+    }
+  }
+
+  getStatistics() {
+    return {
