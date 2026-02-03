@@ -848,3 +848,276 @@ class ConfuSenseApp {
       console.log('[ConfuSense] Fallback found candidate name:', name);
       return name;
     }
+
+    // Last resort: check all video tiles for any name-like text
+    const tiles = document.querySelectorAll('[data-participant-id], [data-requested-participant-id]');
+    for (const tile of tiles) {
+      const nameEl = tile.querySelector('[class*="ZjFb7c"], [class*="zWGUib"]');
+      if (nameEl) {
+        const name = this.domParser?.cleanName(nameEl.textContent);
+        if (name && name.length >= 2 && name !== 'You' && !knownNames.has(name) && name !== hostName) {
+          console.log('[ConfuSense] Fallback found name from tile:', name);
+          return name;
+        }
+      }
+    }
+
+    // Guest fallback: look for any visible name element that could be the user
+    // Google Meet sometimes shows guest names in tooltip or aria-label on the self video
+    const allTiles = document.querySelectorAll('[data-participant-id]');
+    for (const tile of allTiles) {
+      const ariaLabel = tile.getAttribute('aria-label') || '';
+      if (ariaLabel && ariaLabel.length >= 2 && ariaLabel.length < 60) {
+        const name = this.domParser?.cleanName(ariaLabel);
+        if (name && name.length >= 2 && name !== 'You' && !knownNames.has(name) && name !== hostName) {
+          console.log('[ConfuSense] Guest fallback found name from aria-label:', name);
+          return name;
+        }
+      }
+    }
+
+    // Last chance: if there are only 2 tiles and we know the other person's name,
+    // grab the remaining tile's name
+    if (allTiles.length <= 2 && knownNames.size >= 1) {
+      for (const tile of allTiles) {
+        const nameEl = tile.querySelector('[class*="ZjFb7c"], [class*="zWGUib"]');
+        if (nameEl) {
+          const raw = nameEl.textContent?.trim();
+          const name = this.domParser?.cleanName(raw);
+          // Accept even if it's a short name (guest names can be short)
+          if (name && name.length >= 1 && name !== 'You' && !knownNames.has(name)) {
+            console.log('[ConfuSense] Guest fallback (2-tile): found name:', name);
+            return name;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  onMeetingEnd(data) {
+    console.log('[ConfuSense] Meeting ended');
+    
+    this.leaveMeetingRoom();
+    
+    if (this.detector) this.detector.stop();
+    
+    this.ui?.hideDashboard();
+    this.ui?.hideStudentPopup();
+    this.ui?.hideTutorAlert();
+    this.ui?.hideStudentStatus();
+    
+    this.stopSimulation();
+    this.stopStudentSimulation();
+    this.stopSyncInterval();
+
+    if (this.nameResolveInterval) {
+      clearInterval(this.nameResolveInterval);
+      this.nameResolveInterval = null;
+    }
+
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
+    }
+
+    this.logEvent('SESSION_END', {});
+
+    try {
+      chrome.runtime.sendMessage({ type: 'SESSION_END' });
+    } catch (e) {}
+
+    this.state.isInMeeting = false;
+    this.state.sessionId = null;
+    this.state.socketConnected = false;
+    this.state.nameResolved = false;
+    this.state.hasJoinedRoom = false;
+    this.state.participants.clear();
+    this.state.activeStudents.clear();
+    this.state.dismissedAlerts.clear();
+  }
+
+  onParticipantJoin(participant) {
+    console.log('[ConfuSense] Participant joined (DOM):', participant.name);
+    
+    if (this.isHostParticipant(participant)) return;
+    
+    const newParticipant = {
+      ...participant,
+      role: 'student',
+      confusionRate: Math.floor(Math.random() * 60) + 20,
+      detectionEnabled: true
+    };
+    
+    this.state.participants.set(participant.id, newParticipant);
+    this.logEvent('PARTICIPANT_JOIN', { name: participant.name });
+  }
+
+  onParticipantLeave(participant) {
+    console.log('[ConfuSense] Participant left (DOM):', participant.name);
+    
+    this.state.participants.delete(participant.id);
+    this.state.activeStudents.delete(participant.id);
+    
+    if (this.isTutor()) {
+      this.ui?.updateDashboard(this.getActiveStudentsArray());
+    }
+    
+    this.logEvent('PARTICIPANT_LEAVE', { name: participant.name });
+  }
+
+  onHostDetected(host) {
+    console.log('[ConfuSense] Host detected:', host.name);
+    
+    if (this.domParser?.isSelfHost() && this.settings.role !== 'tutor') {
+      this.setRole('tutor');
+    }
+  }
+
+  onConfusionUpdate(data) {
+    if (this.settings.role !== 'student') return;
+    const selfName = this.domParser?.selfInfo?.name;
+    if (!selfName) return;
+
+    if (this.socket && this.socket.connected) {
+      this.socket.emit('confusion_update', {
+        meeting_id: this.state.meetingId,
+        participant_id: this.state.selfParticipantId,
+        participant_name: selfName,
+        confusion_rate: data.confusionScore
+      });
+    }
+  }
+
+  onConfusionAlert(data) {
+    if (this.settings.role !== 'student') return;
+
+    // v4.0: Skip if in intervention cooldown
+    if (this.state.interventionCooldownUntil && Date.now() < this.state.interventionCooldownUntil) {
+      console.log('[ConfuSense] Suppressing alert — intervention cooldown active');
+      return;
+    }
+
+    this.ui?.showStudentPopup((confirmed, timeout) => {
+      this.onPopupResponse(confirmed, timeout);
+    });
+  }
+
+  onPopupResponse(confirmed, timeout) {
+    this.logEvent('POPUP_RESPONSE', { confirmed, timeout });
+
+    // v4.0: Emit confusion_confirmed to server
+    if (this.socket && this.socket.connected) {
+      const selfName = this.domParser?.selfInfo?.name;
+      const confusionRate = this.detector?.lastConfusionScore || this._lastConfusionScore || this.studentConfusionScore || 0;
+      this.socket.emit('confusion_confirmed', {
+        meeting_id: this.state.meetingId,
+        participant_id: this.state.selfParticipantId,
+        participant_name: selfName || 'Unknown',
+        confirmed: confirmed,
+        confusion_rate: Math.round(confusionRate)
+      });
+      console.log(`[ConfuSense] Sent confusion_confirmed: ${confirmed}, rate: ${Math.round(confusionRate)}%`);
+    }
+
+    // If student said NO, reset the confusion score downward to avoid re-triggering immediately
+    if (!confirmed && this.studentConfusionScore !== undefined) {
+      this.studentConfusionScore = Math.max(0, this.studentConfusionScore - 30);
+      this.confusionHistory = [];
+    }
+  }
+
+  onIntervene(student) {
+    this.logEvent('INTERVENTION', { studentName: student.name });
+
+    // v4.0: Emit intervention to server
+    if (this.socket && this.socket.connected) {
+      const selfName = this.domParser?.selfInfo?.name || 'Tutor';
+      this.socket.emit('intervention', {
+        meeting_id: this.state.meetingId,
+        participant_id: student.id,
+        tutor_name: selfName,
+        cooldown_duration: 300000
+      });
+      console.log(`[ConfuSense] Sent intervention for ${student.name}`);
+    }
+  }
+
+  onDismissAlert(student, duration) {
+    this.state.dismissedAlerts.add(student.id);
+  }
+
+  // ==================== UTILITIES ====================
+
+  getParticipantsArray() {
+    return Array.from(this.state.participants.values());
+  }
+
+  getActiveStudentsArray() {
+    const students = [];
+    const hostName = this.domParser?.hostInfo?.name;
+    const selfName = this.domParser?.selfInfo?.name;
+    
+    this.state.activeStudents.forEach(student => {
+      if (student.name === hostName) return;
+      if (this.isTutor() && student.name === selfName) return;
+      if (this.isHostParticipant(student)) return;
+      
+      students.push(student);
+    });
+    
+    return students.sort((a, b) => (b.confusionRate || 0) - (a.confusionRate || 0));
+  }
+
+  logEvent(type, data) {
+    this.state.eventLog.push({ type, timestamp: Date.now(), ...data });
+  }
+
+  exportSessionData() {
+    const students = this.getActiveStudentsArray();
+    const csv = [
+      ['Name', 'Confusion Rate', 'Detection Enabled', 'Timestamp'],
+      ...students.map(s => [
+        s.name,
+        Math.round(s.confusionRate || 0),
+        s.detectionEnabled ? 'Yes' : 'No',
+        new Date().toISOString()
+      ])
+    ].map(row => row.join(',')).join('\n');
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `confusense_${this.state.meetingId || 'session'}_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+}
+
+// Initialize
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    window.confuSenseApp = new ConfuSenseApp();
+    window.confuSenseApp.init();
+  });
+} else {
+  window.confuSenseApp = new ConfuSenseApp();
+  window.confuSenseApp.init();
+}
+
+// Debug
+window.csDebug = {
+  getState: () => window.confuSenseApp?.state,
+  getSettings: () => window.confuSenseApp?.settings,
+  isConnected: () => window.confuSenseApp?.state?.socketConnected,
+  showDashboard: () => window.confuSenseApp?.ui?.showDashboard(window.confuSenseApp?.getActiveStudentsArray()),
+  showStudentWidget: () => window.confuSenseApp?.ui?.showStudentStatus(true),
+  setTutor: () => window.confuSenseApp?.setRole('tutor'),
+  setStudent: () => window.confuSenseApp?.setRole('student'),
+  testOff: () => window.confuSenseApp?.sendStatusUpdate(false),
+  testOn: () => window.confuSenseApp?.sendStatusUpdate(true)
+};
+
+console.log('[ConfuSense] Script loaded. Debug: csDebug.getState()');
