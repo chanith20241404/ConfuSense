@@ -798,3 +798,672 @@ class UIInjector {
           const rowBg = i % 2 === 1 ? 'background:rgba(60,60,140,0.15);' : '';
           eventRowsHTML += `
             <tr style="${rowBg}">
+              <td style="padding:5px 6px;color:#d0d0e8;font-size:10px;">${timeStr}</td>
+              <td style="padding:5px 6px;color:#d0d0e8;font-size:10px;">${evRate}%</td>
+              <td style="padding:5px 6px;">
+                <div style="width:70px;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
+                  <div style="width:${barWidth}%;height:100%;border-radius:3px;background:linear-gradient(to right,#6366f1,#8b5cf6);"></div>
+                </div>
+              </td>
+              <td style="padding:5px 6px;color:${statusColor};font-size:9px;">${statusText}</td>
+            </tr>
+          `;
+        });
+      } else {
+        // No events recorded yet - show message
+        eventRowsHTML = `
+          <tr>
+            <td colspan="4" style="padding:8px 6px;color:#8888a8;font-size:10px;text-align:center;">
+              No confusion events recorded during session
+            </td>
+          </tr>
+        `;
+      }
+
+      // Number of readings and interventions
+      const readingCount = student.readings.length;
+      const interventionCount = student.interventions.length;
+
+      html += `
+        <div style="background:rgba(75,70,180,0.25);border:1.5px solid rgba(100,100,230,0.45);border-radius:14px;padding:18px;margin-bottom:24px;">
+          <div style="font-size:15px;font-weight:bold;color:#fff;">Student : ${student.name}</div>
+          <div style="font-size:11px;color:#a0a0c0;margin-top:4px;">Overall Confusion Rate</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+            <div style="font-size:38px;font-weight:bold;color:#fff;">${rate}%</div>
+            <svg width="52" height="52" viewBox="0 0 52 52" style="transform:rotate(-90deg);">
+              <circle cx="26" cy="26" r="21" fill="none" stroke="rgba(180,40,40,0.25)" stroke-width="6"/>
+              <circle cx="26" cy="26" r="21" fill="none" stroke="#dc2626" stroke-width="6"
+                stroke-linecap="round" stroke-dasharray="${circumference.toFixed(2)}" stroke-dashoffset="${dashoffset.toFixed(2)}"/>
+            </svg>
+          </div>
+          <div style="font-size:11px;font-weight:bold;color:#fff;margin-top:16px;">Confusion Events Log</div>
+          <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+            <thead>
+              <tr style="background:rgba(60,60,140,0.45);">
+                <th style="color:#c0c0d8;font-size:8px;font-weight:bold;text-align:left;padding:4px 6px;">Time Period</th>
+                <th style="color:#c0c0d8;font-size:8px;font-weight:bold;text-align:left;padding:4px 6px;">Avg Rate</th>
+                <th style="color:#c0c0d8;font-size:8px;font-weight:bold;text-align:left;padding:4px 6px;">Confusion Level</th>
+                <th style="color:#c0c0d8;font-size:8px;font-weight:bold;text-align:left;padding:4px 6px;">Intervention Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${eventRowsHTML}
+            </tbody>
+          </table>
+          <div style="color:#8888a8;font-size:10px;margin-top:10px;">
+            Total Confusion Time - ${totalStr}(min:sec) | Readings: ${readingCount} | Interventions: ${interventionCount}
+          </div>
+        </div>
+      `;
+    });
+
+    reportDiv.innerHTML = html;
+    document.body.appendChild(reportDiv);
+
+    // Render HTML to canvas
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const width = 480;
+      const height = reportDiv.scrollHeight;
+      canvas.width = width * 2;  // 2x for clarity
+      canvas.height = height * 2;
+      ctx.scale(2, 2);
+
+      // Draw background
+      ctx.fillStyle = '#0a0a18';
+      ctx.fillRect(0, 0, width, height);
+
+      // Use SVG foreignObject to render HTML into canvas
+      const svgData = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+          <foreignObject width="100%" height="100%">
+            <div xmlns="http://www.w3.org/1999/xhtml">
+              ${reportDiv.innerHTML}
+            </div>
+          </foreignObject>
+        </svg>
+      `;
+
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => {
+          console.warn('[ConfuSense] SVG render failed, falling back to canvas draw');
+          reject(new Error('SVG render failed'));
+        };
+        img.src = svgUrl;
+      });
+
+      ctx.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(svgUrl);
+      reportDiv.remove();
+
+      this._downloadCanvasAsPDF(canvas, `ConfuSense_Session_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (svgErr) {
+      console.warn('[ConfuSense] SVG approach failed, using canvas fallback:', svgErr);
+      reportDiv.remove();
+      // Fallback: use manual canvas rendering
+      await this._buildPDFCanvasFallback(students);
+    }
+  }
+
+  async _buildPDFCanvasFallback(students) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    // 3x resolution for crisp PDF output
+    const SCALE = 3;
+    const W = 520;
+    const PAD = 28;
+    const CARD_PAD = 22;
+    const CARD_GAP = 28;
+    const CARD_W = W - PAD * 2;
+    const ROW_H = 28;
+    const TITLE_AREA = 110;  // more room for title + session info
+
+    // Calculate height dynamically
+    let totalH = TITLE_AREA;
+    students.forEach(s => {
+      const eventCount = Math.max(Math.min(s.events.length, 8), 1);
+      const cardH = 170 + eventCount * ROW_H + 36;
+      totalH += cardH + CARD_GAP;
+    });
+    totalH += PAD * 2;
+
+    canvas.width = W * SCALE;
+    canvas.height = Math.max(totalH, 500) * SCALE;
+    ctx.scale(SCALE, SCALE);
+
+    // Enable font smoothing
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    // ── Background ──
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, totalH);
+    bgGrad.addColorStop(0, '#0c0c20');
+    bgGrad.addColorStop(0.5, '#080818');
+    bgGrad.addColorStop(1, '#060612');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, totalH);
+
+    // Top glow
+    const topGlow = ctx.createRadialGradient(W / 2, 0, 20, W / 2, 0, W * 0.7);
+    topGlow.addColorStop(0, 'rgba(90, 80, 240, 0.15)');
+    topGlow.addColorStop(0.5, 'rgba(60, 60, 180, 0.06)');
+    topGlow.addColorStop(1, 'transparent');
+    ctx.fillStyle = topGlow;
+    ctx.fillRect(0, 0, W, 250);
+
+    // ── ConfuSense branding ──
+    ctx.fillStyle = '#8b5cf6';
+    ctx.font = 'bold 11px Segoe UI, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('ConfuSense', W / 2, 24);
+
+    // ── Title ──
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 22px Segoe UI, sans-serif';
+    ctx.fillText('Session Report', W / 2, 52);
+
+    // ── Session info line ──
+    const sessionDate = new Date().toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+    const sessionDur = this.formatTime(this.sessionTime);
+    ctx.fillStyle = '#7878a0';
+    ctx.font = '10px Segoe UI, sans-serif';
+    ctx.fillText(`${sessionDate}  ·  Duration: ${sessionDur}  ·  ${students.length} Student${students.length !== 1 ? 's' : ''}`, W / 2, 72);
+
+    // Thin separator line
+    ctx.strokeStyle = 'rgba(100, 100, 220, 0.2)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(PAD + 30, 85);
+    ctx.lineTo(W - PAD - 30, 85);
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    let y = TITLE_AREA;
+
+    students.forEach((student) => {
+      const rate = student.overallRate;
+      const events = student.events.slice(-8);
+      const eventCount = Math.max(Math.min(events.length, 8), 1);
+      const CARD_H = 170 + eventCount * ROW_H + 36;
+      const cx = PAD;
+
+      // ── Card shadow ──
+      ctx.shadowColor = 'rgba(80, 70, 200, 0.15)';
+      ctx.shadowBlur = 12;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 4;
+
+      // ── Card background gradient ──
+      const cardGrad = ctx.createLinearGradient(cx, y, cx, y + CARD_H);
+      cardGrad.addColorStop(0, 'rgba(80, 75, 190, 0.3)');
+      cardGrad.addColorStop(1, 'rgba(50, 45, 140, 0.18)');
+      ctx.fillStyle = cardGrad;
+      ctx.strokeStyle = 'rgba(110, 110, 240, 0.4)';
+      ctx.lineWidth = 1;
+      this._roundRect(ctx, cx, y, CARD_W, CARD_H, 16);
+
+      // Reset shadow
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+
+      // ── Inner glow at top of card ──
+      const innerGlow = ctx.createLinearGradient(cx, y, cx, y + 60);
+      innerGlow.addColorStop(0, 'rgba(120, 110, 255, 0.08)');
+      innerGlow.addColorStop(1, 'transparent');
+      ctx.fillStyle = innerGlow;
+      ctx.fillRect(cx + 1, y + 1, CARD_W - 2, 58);
+
+      // ── "Student : Name" ──
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 16px Segoe UI, sans-serif';
+      ctx.fillText(`Student : ${student.name}`, cx + CARD_PAD, y + 30);
+
+      // ── "Overall Confusion Rate" ──
+      ctx.fillStyle = '#9898b8';
+      ctx.font = '11px Segoe UI, sans-serif';
+      ctx.fillText('Overall Confusion Rate', cx + CARD_PAD, y + 50);
+
+      // ── Big percentage ──
+      const rateColor = rate >= 70 ? '#f87171' : rate >= 50 ? '#fbbf24' : '#4ade80';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 42px Segoe UI, sans-serif';
+      ctx.fillText(`${rate}%`, cx + CARD_PAD, y + 100);
+
+      // ── Donut ring (right side) ──
+      const donutX = cx + CARD_W - 56;
+      const donutY = y + 74;
+      const donutR = 28;
+      const donutWidth = 7;
+
+      // Track background
+      ctx.beginPath();
+      ctx.arc(donutX, donutY, donutR, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(200, 50, 50, 0.15)';
+      ctx.lineWidth = donutWidth;
+      ctx.stroke();
+
+      // Progress arc
+      ctx.beginPath();
+      const startAngle = -Math.PI / 2;
+      const endAngle = startAngle + (rate / 100) * Math.PI * 2;
+      ctx.arc(donutX, donutY, donutR, startAngle, endAngle);
+      const donutGrad = ctx.createLinearGradient(donutX - donutR, donutY - donutR, donutX + donutR, donutY + donutR);
+      donutGrad.addColorStop(0, '#ef4444');
+      donutGrad.addColorStop(1, '#dc2626');
+      ctx.strokeStyle = donutGrad;
+      ctx.lineWidth = donutWidth;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+
+      // Rate text inside donut
+      ctx.fillStyle = rateColor;
+      ctx.font = 'bold 12px Segoe UI, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${rate}%`, donutX, donutY + 4);
+      ctx.textAlign = 'left';
+
+      // ── Divider line ──
+      ctx.strokeStyle = 'rgba(100, 100, 220, 0.15)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(cx + CARD_PAD, y + 115);
+      ctx.lineTo(cx + CARD_W - CARD_PAD, y + 115);
+      ctx.stroke();
+
+      // ── "Confusion Events Log" ──
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 12px Segoe UI, sans-serif';
+      ctx.fillText('Confusion Events Log', cx + CARD_PAD, y + 132);
+
+      // ── Table header ──
+      const tblX = cx + CARD_PAD;
+      const tblW = CARD_W - CARD_PAD * 2;
+      const tblY = y + 142;
+
+      // Header background with rounded top corners
+      ctx.fillStyle = 'rgba(55, 55, 150, 0.5)';
+      this._roundRectFill(ctx, tblX, tblY, tblW, 22, 6, true, false);
+
+      ctx.fillStyle = '#b8b8d8';
+      ctx.font = 'bold 9px Segoe UI, sans-serif';
+      const cols = [0, 100, 155, 290];
+      ctx.fillText('Time Period', tblX + cols[0] + 8, tblY + 15);
+      ctx.fillText('Avg Rate', tblX + cols[1] + 8, tblY + 15);
+      ctx.fillText('Confusion Level', tblX + cols[2] + 8, tblY + 15);
+      ctx.fillText('Intervention', tblX + cols[3] + 8, tblY + 15);
+
+      // ── Event rows ──
+      if (events.length > 0) {
+        events.forEach((ev, i) => {
+          const rowY = tblY + 22 + i * ROW_H;
+          const tStart = new Date(ev.timestamp);
+          const tEnd = new Date(ev.endTimestamp || ev.timestamp + 300000);
+          const fmtTime = (d) => [d.getHours(), d.getMinutes()].map(v => v.toString().padStart(2, '0')).join(':');
+          const timeStr = `${fmtTime(tStart)} – ${fmtTime(tEnd)}`;
+          const evRate = ev.rate || rate;
+
+          // Alternating row background
+          if (i % 2 === 0) {
+            ctx.fillStyle = 'rgba(50, 50, 130, 0.12)';
+          } else {
+            ctx.fillStyle = 'rgba(60, 60, 150, 0.2)';
+          }
+          // Last row gets rounded bottom corners
+          if (i === events.length - 1) {
+            this._roundRectFill(ctx, tblX, rowY, tblW, ROW_H, 6, false, true);
+          } else {
+            ctx.fillRect(tblX, rowY, tblW, ROW_H);
+          }
+
+          // Text
+          ctx.fillStyle = '#d0d0e8';
+          ctx.font = '10px Segoe UI, sans-serif';
+          ctx.fillText(timeStr, tblX + cols[0] + 8, rowY + 18);
+          ctx.fillText(`${evRate}%`, tblX + cols[1] + 14, rowY + 18);
+
+          // Progress bar with rounded ends
+          const barX = tblX + cols[2] + 8;
+          const barW = 80;
+          const barH = 7;
+          const barY = rowY + 11;
+
+          // Bar track
+          ctx.fillStyle = 'rgba(255,255,255,0.06)';
+          this._roundRectFill(ctx, barX, barY, barW, barH, 3.5);
+
+          // Bar fill with gradient
+          const fillW = Math.max((evRate / 100) * barW, 4);
+          const barGrad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+          barGrad.addColorStop(0, '#6366f1');
+          barGrad.addColorStop(0.6, '#8b5cf6');
+          barGrad.addColorStop(1, '#a78bfa');
+          ctx.fillStyle = barGrad;
+          this._roundRectFill(ctx, barX, barY, fillW, barH, 3.5);
+
+          // Rate text after bar
+          ctx.fillStyle = '#9898b8';
+          ctx.font = '8px Segoe UI, sans-serif';
+          ctx.fillText(`${evRate}%`, barX + barW + 4, rowY + 18);
+
+          // Intervention status
+          const hasIntervention = ev.intervention && ev.intervention !== 'None';
+          ctx.fillStyle = hasIntervention ? '#4ade80' : (evRate >= 70 ? '#f87171' : evRate >= 50 ? '#fbbf24' : '#6ee7b7');
+          ctx.font = '9px Segoe UI, sans-serif';
+          const statusText = hasIntervention
+            ? `✓ ${ev.interventionBy || 'Tutor'}`
+            : (evRate >= 70 ? '⚠ High' : evRate >= 50 ? '● Medium' : '● Low');
+          ctx.fillText(statusText, tblX + cols[3] + 8, rowY + 18);
+        });
+      } else {
+        const rowY = tblY + 22;
+        ctx.fillStyle = 'rgba(50, 50, 130, 0.12)';
+        this._roundRectFill(ctx, tblX, rowY, tblW, ROW_H, 6, false, true);
+        ctx.fillStyle = '#7878a0';
+        ctx.font = 'italic 10px Segoe UI, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('No confusion events recorded during session', tblX + tblW / 2, rowY + 18);
+        ctx.textAlign = 'left';
+      }
+
+      // ── Footer: Total confusion time ──
+      const totalM = Math.floor(student.totalConfusionSec / 60);
+      const totalS = student.totalConfusionSec % 60;
+      const totalStr = `${totalM.toString().padStart(2, '0')}:${totalS.toString().padStart(2, '0')}`;
+      ctx.fillStyle = '#7878a0';
+      ctx.font = '10px Segoe UI, sans-serif';
+      ctx.fillText(`Total Confusion Time – ${totalStr} (min:sec)`, cx + CARD_PAD, y + CARD_H - 16);
+
+      // Readings & interventions count on right
+      const metaText = `${student.readings.length} readings · ${student.interventions.length} interventions`;
+      ctx.textAlign = 'right';
+      ctx.fillText(metaText, cx + CARD_W - CARD_PAD, y + CARD_H - 16);
+      ctx.textAlign = 'left';
+
+      y += CARD_H + CARD_GAP;
+    });
+
+    // ── Footer ──
+    ctx.fillStyle = '#50506a';
+    ctx.font = '8px Segoe UI, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`Generated by ConfuSense · ${new Date().toLocaleString()}`, W / 2, y + 10);
+    ctx.textAlign = 'left';
+
+    this._downloadCanvasAsPDF(canvas, `ConfuSense_Session_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+  }
+
+  _roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // Fill-only rounded rect with optional top/bottom rounding
+  _roundRectFill(ctx, x, y, w, h, r, roundTop = true, roundBottom = true) {
+    const rt = roundTop ? r : 0;
+    const rb = roundBottom ? r : 0;
+    ctx.beginPath();
+    ctx.moveTo(x + rt, y);
+    ctx.lineTo(x + w - rt, y);
+    if (roundTop) {
+      ctx.quadraticCurveTo(x + w, y, x + w, y + rt);
+    } else {
+      ctx.lineTo(x + w, y);
+    }
+    ctx.lineTo(x + w, y + h - rb);
+    if (roundBottom) {
+      ctx.quadraticCurveTo(x + w, y + h, x + w - rb, y + h);
+    } else {
+      ctx.lineTo(x + w, y + h);
+    }
+    ctx.lineTo(x + rb, y + h);
+    if (roundBottom) {
+      ctx.quadraticCurveTo(x, y + h, x, y + h - rb);
+    } else {
+      ctx.lineTo(x, y + h);
+    }
+    ctx.lineTo(x, y + rt);
+    if (roundTop) {
+      ctx.quadraticCurveTo(x, y, x + rt, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  _downloadCanvasAsPDF(canvas, filename) {
+    // High quality JPEG at 3x resolution = crisp output
+    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+    const imgBytes = atob(imgData.split(',')[1]);
+    const imgArray = new Uint8Array(imgBytes.length);
+    for (let i = 0; i < imgBytes.length; i++) imgArray[i] = imgBytes.charCodeAt(i);
+
+    const width = canvas.width;
+    const height = canvas.height;
+    const pdfW = 595;
+    const scale = pdfW / width;
+    const pdfH = Math.ceil(height * scale);
+
+    const objects = [];
+    let offset = 0;
+    const addObj = (content) => {
+      objects.push({ offset, content });
+      offset += content.length;
+      return objects.length;
+    };
+
+    let pdf = '%PDF-1.4\n';
+    offset = pdf.length;
+
+    const cat = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`;
+    addObj(cat); pdf += cat;
+    const pages = `2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n`;
+    addObj(pages); pdf += pages;
+    const page = `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pdfW} ${pdfH}] /Contents 4 0 R /Resources << /XObject << /Img0 5 0 R >> >> >>\nendobj\n`;
+    addObj(page); pdf += page;
+    const stream = `q ${pdfW} 0 0 ${pdfH} 0 0 cm /Img0 Do Q`;
+    const content = `4 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}\nendstream\nendobj\n`;
+    addObj(content); pdf += content;
+    const imgHeader = `5 0 obj\n<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imgArray.length} >>\nstream\n`;
+    addObj(imgHeader); pdf += imgHeader;
+
+    const textEncoder = new TextEncoder();
+    const pdfBefore = textEncoder.encode(pdf);
+    const streamEnd = textEncoder.encode('\nendstream\nendobj\n');
+    const xrefOffset = pdfBefore.length + imgArray.length + streamEnd.length;
+    const xrefStr = `xref\n0 6\n0000000000 65535 f \n` +
+      objects.map(o => `${o.offset.toString().padStart(10, '0')} 00000 n `).join('\n') +
+      `\ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+    const xrefBytes = textEncoder.encode(xrefStr);
+
+    const totalLength = pdfBefore.length + imgArray.length + streamEnd.length + xrefBytes.length;
+    const finalPdf = new Uint8Array(totalLength);
+    finalPdf.set(pdfBefore, 0);
+    finalPdf.set(imgArray, pdfBefore.length);
+    finalPdf.set(streamEnd, pdfBefore.length + imgArray.length);
+    finalPdf.set(xrefBytes, pdfBefore.length + imgArray.length + streamEnd.length);
+
+    const blob = new Blob([finalPdf], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  _exportSessionCSV() {
+    const students = this._getStudentReportData();
+    const sessionDuration = this.formatTime(this.sessionTime);
+    const lines = [
+      ['ConfuSense Session Report'],
+      [`Session Date: ${new Date().toLocaleDateString()}`, `Duration: ${sessionDuration}`],
+      [],
+      ['Student Name', 'Overall Confusion Rate (%)', 'Total Confusion Time (sec)', 'Confusion Events', 'Interventions', 'Readings Logged']
+    ];
+
+    students.forEach(s => {
+      lines.push([
+        s.name,
+        s.overallRate,
+        s.totalConfusionSec,
+        s.events.length,
+        s.interventions.length,
+        s.readings.length
+      ]);
+    });
+
+    lines.push([]);
+    lines.push(['--- Detailed Confusion Events ---']);
+    lines.push(['Student Name', 'Event Time', 'Duration (sec)', 'Confusion Rate (%)', 'Intervention Status', 'Intervened By']);
+
+    students.forEach(s => {
+      s.events.forEach(ev => {
+        const t = new Date(ev.timestamp);
+        const timeStr = t.toLocaleTimeString();
+        lines.push([
+          s.name,
+          timeStr,
+          ev.duration || 0,
+          ev.rate || 0,
+          ev.intervention || 'None',
+          ev.interventionBy || ''
+        ]);
+      });
+    });
+
+    lines.push([]);
+    lines.push(['--- Raw Session Log (every 10s) ---']);
+    lines.push(['Timestamp', 'Student Name', 'Confusion Rate (%)', 'Confirmed', 'Intervention']);
+
+    this.sessionLog.forEach(entry => {
+      lines.push([
+        new Date(entry.timestamp).toLocaleTimeString(),
+        entry.studentName,
+        entry.confusionRate,
+        entry.confirmed ? 'Yes' : 'No',
+        entry.intervention || 'None'
+      ]);
+    });
+
+    const csv = lines.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `ConfuSense_Session_Data_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+  }
+
+  // ==================== DRAG ====================
+
+  setupDrag(element, handleSelector = null) {
+    const handle = handleSelector ? element.querySelector(handleSelector) : element;
+    if (!handle) return;
+
+    let isDragging = false;
+    let startX, startY, initialX, initialY;
+
+    handle.style.cursor = 'grab';
+
+    // Clamp element position to stay within viewport
+    const clampToViewport = () => {
+      const rect = element.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      let left = rect.left;
+      let top = rect.top;
+      let clamped = false;
+
+      if (left + rect.width > vw) { left = vw - rect.width; clamped = true; }
+      if (left < 0) { left = 0; clamped = true; }
+      if (top + rect.height > vh) { top = vh - rect.height; clamped = true; }
+      if (top < 0) { top = 0; clamped = true; }
+
+      if (clamped) {
+        element.style.left = `${left}px`;
+        element.style.top = `${top}px`;
+      }
+    };
+
+    handle.addEventListener('mousedown', (e) => {
+      if (e.target.tagName === 'BUTTON') return;
+      isDragging = true;
+      handle.style.cursor = 'grabbing';
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = element.getBoundingClientRect();
+      initialX = rect.left;
+      initialY = rect.top;
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const newLeft = initialX + e.clientX - startX;
+      const newTop = initialY + e.clientY - startY;
+
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const rect = element.getBoundingClientRect();
+      element.style.left = `${Math.max(0, Math.min(newLeft, vw - rect.width))}px`;
+      element.style.top = `${Math.max(0, Math.min(newTop, vh - rect.height))}px`;
+      element.style.right = 'auto';
+      element.style.bottom = 'auto';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        handle.style.cursor = 'grab';
+      }
+    });
+
+    // Keep widgets visible when window is resized
+    window.addEventListener('resize', clampToViewport);
+  }
+
+  // ==================== TIMER ====================
+
+  startSessionTimer() {
+    this.sessionStartTime = Date.now();
+    this.timerInterval = setInterval(() => {
+      this.sessionTime = Math.floor((Date.now() - this.sessionStartTime) / 1000);
+      if (this.state.dashboardVisible && !this.state.dashboardMinimized) {
+        const timeEl = this.elements.dashboard?.querySelector('#cs-session-time');
+        if (timeEl) timeEl.textContent = this.formatTime(this.sessionTime);
+      }
+    }, 1000);
+  }
+
+  // ==================== CLEANUP ====================
+
+  destroy() {
+    if (this.timerInterval) clearInterval(this.timerInterval);
+    if (this.popupTimeout) clearTimeout(this.popupTimeout);
+    if (this.elements.container) this.elements.container.remove();
+  }
+}
+
+window.ConfuSenseUI = UIInjector;
