@@ -268,3 +268,18 @@ class ConfuSenseFLClient {
 
   getStatistics() {
     return {
+      clientId: this.options.clientId,
+      trainingDataCount: this.trainingData.length,
+      globalModelVersion: this.globalModelVersion,
+      lastSyncTime: this.lastSyncTime,
+      isTraining: this.isTraining,
+      pendingUpdates: (this.pendingUpdates || []).length
+    };
+  }
+
+  getPrivacyGuarantee() {
+    if (!this.options.useDifferentialPrivacy) return { differentialPrivacy: false };
+
+    const epsilon = Math.sqrt(2 * Math.log(1.25 / 1e-5)) / this.options.dpNoiseMultiplier;
+
+    return {
