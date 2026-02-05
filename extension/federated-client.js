@@ -283,3 +283,13 @@ class ConfuSenseFLClient {
     const epsilon = Math.sqrt(2 * Math.log(1.25 / 1e-5)) / this.options.dpNoiseMultiplier;
 
     return {
+      differentialPrivacy: true,
+      epsilon: epsilon,
+      delta: 1e-5,
+      noiseMultiplier: this.options.dpNoiseMultiplier,
+      l2NormClip: this.options.dpL2NormClip
+    };
+  }
+
+  destroy() {
+    this.stopPeriodicSync();
