@@ -293,3 +293,9 @@ class ConfuSenseFLClient {
 
   destroy() {
     this.stopPeriodicSync();
+    this.trainingData = [];
+    this.localModel = null;
+  }
+}
+
+window.ConfuSenseFLClient = ConfuSenseFLClient;
