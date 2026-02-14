@@ -1,0 +1,13 @@
+{
+  "format": "layers-model",
+  "generatedBy": "ConfuSense",
+  "convertedBy": null,
+  "modelTopology": {
+    "class_name": "Sequential",
+    "config": {
+      "name": "confusense_model",
+      "layers": []
+    }
+  },
+  "weightsManifest": []
+}
