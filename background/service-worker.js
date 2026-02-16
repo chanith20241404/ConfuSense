@@ -6,3 +6,18 @@ chrome.runtime.onInstalled.addListener(() => {
     confusenseSettings: { enabled: true, role: 'student' }
   });
 });
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === 'SESSION_START') {
+    chrome.action.setBadgeText({ tabId: sender.tab?.id, text: 'ON' });
+    chrome.action.setBadgeBackgroundColor({ color: '#8B5CF6' });
+  } else if (msg.type === 'SESSION_END') {
+    chrome.action.setBadgeText({ tabId: sender.tab?.id, text: '' });
+  }
+  sendResponse({ success: true });
+  return true;
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  console.log('[ConfuSense] Tab closed:', tabId);
+});
