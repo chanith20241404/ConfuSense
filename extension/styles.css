@@ -1,0 +1,598 @@
+/* ============================================
+   ConfuSense v4.0 - Styles matching wireframes
+   ============================================ */
+
+#confusense-root {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 999999;
+  pointer-events: none;
+  overflow: visible;
+}
+#confusense-root * { pointer-events: auto; }
+
+/* Utilities */
+.cs-hidden { display: none !important; }
+
+/* ============================================
+   TUTOR DASHBOARD - matches wireframe exactly
+   Black background, blue glow border, purple accents
+   ============================================ */
+
+.cs-dashboard {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  width: 340px;
+  max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 100px);
+  background: #000000;
+  border-radius: 16px;
+  border: 1px solid rgba(60, 80, 200, 0.5);
+  box-shadow: 0 0 30px rgba(60, 80, 200, 0.15), 0 8px 32px rgba(0,0,0,0.6);
+  animation: cs-slide-in 0.3s ease-out;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes cs-slide-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Dashboard Header */
+.cs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: grab;
+}
+.cs-header:active { cursor: grabbing; }
+
+.cs-logo { font-size: 16px; font-weight: 600; }
+.cs-logo-purple { color: #8B5CF6; }
+.cs-logo-white { color: #ffffff; }
+
+.cs-traffic-buttons { display: flex; gap: 8px; }
+.cs-traffic-btn {
+  width: 12px; height: 12px; border-radius: 50%; border: none;
+  cursor: pointer; opacity: 0.85; transition: all 0.2s;
+}
+.cs-traffic-btn:hover { opacity: 1; transform: scale(1.2); }
+.cs-btn-yellow { background: #FBBF24; }
+.cs-btn-orange { background: #F97316; }
+.cs-btn-red { background: #EF4444; }
+
+/* Dashboard Title */
+.cs-dashboard-title {
+  text-align: center;
+  padding: 4px 16px 12px;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+/* Overall Confusion Card - wireframe: bordered pill with label + big % */
+.cs-overall-card {
+  margin: 0 auto 16px;
+  padding: 12px 24px;
+  border: 1px solid rgba(100, 120, 220, 0.4);
+  border-radius: 24px;
+  text-align: center;
+  width: fit-content;
+}
+.cs-overall-label {
+  color: #B0B0C0;
+  font-size: 12px;
+  font-weight: 400;
+  margin-bottom: 4px;
+}
+.cs-overall-value {
+  font-size: 32px;
+  font-weight: 700;
+}
+
+/* Session timer */
+.cs-session-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 12px;
+  color: #7a7a8a;
+}
+.cs-session-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #4ade80;
+  animation: csPulse 2s infinite;
+}
+@keyframes csPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.cs-session-time { margin-left: auto; font-family: monospace; color: #aaa; }
+
+/* Dashboard Body */
+.cs-body {
+  padding: 0 12px 12px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.cs-body::-webkit-scrollbar { width: 4px; }
+.cs-body::-webkit-scrollbar-track { background: transparent; }
+.cs-body::-webkit-scrollbar-thumb { background: rgba(100,120,220,0.3); border-radius: 2px; }
+
+/* ============================================
+   PARTICIPANT CARDS - wireframe style
+   Blue bordered rectangles with colored avatar circles
+   ============================================ */
+
+.cs-participants {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cs-no-students {
+  text-align: center;
+  color: #6B7280;
+  font-size: 13px;
+  padding: 24px 16px;
+}
+
+.cs-participant {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(20, 20, 40, 0.6);
+  border: 1px solid rgba(80, 100, 220, 0.45);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.cs-participant:hover {
+  background: rgba(80, 100, 220, 0.1);
+  border-color: rgba(80, 100, 220, 0.7);
+}
+.cs-participant.high-confusion {
+  border-color: rgba(239, 68, 68, 0.6);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.1);
+}
+
+/* Avatar Circle - colored circle with white initials (matches wireframe) */
+.cs-avatar {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700;
+  color: #000000;
+  flex-shrink: 0;
+  border: 2px solid rgba(255,255,255,0.15);
+}
+
+.cs-participant-info { flex: 1; min-width: 0; }
+.cs-participant-name {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Progress bar - matches wireframe gradient style */
+.cs-progress-bar {
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.cs-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease, background 0.3s;
+}
+
+.cs-confusion-rate {
+  font-size: 15px;
+  font-weight: 700;
+  min-width: 45px;
+  text-align: right;
+}
+
+/* Intervene button on student card (appears when student confirms confusion) */
+.cs-card-intervene-btn {
+  padding: 6px 10px;
+  background: #EF4444;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  animation: cs-flash 1s ease infinite;
+  white-space: nowrap;
+}
+.cs-card-intervene-btn:hover {
+  background: #DC2626;
+}
+@keyframes cs-flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.cs-card-intervening-label {
+  padding: 6px 10px;
+  background: rgba(74, 222, 128, 0.15);
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  border-radius: 6px;
+  color: #4ade80;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  animation: cs-flash 1.5s ease infinite;
+}
+
+/* Export/Download button */
+.cs-export-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  background: rgba(139, 92, 246, 0.15);
+  color: #8B5CF6;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.cs-export-btn:hover {
+  background: rgba(139, 92, 246, 0.3);
+  color: #fff;
+}
+
+/* ============================================
+   DASHBOARD BUBBLE (Minimized)
+   ============================================ */
+
+.cs-dashboard-bubble {
+  position: fixed; top: 80px; right: 20px;
+  width: 60px; height: 60px;
+  background: #000000; border-radius: 50%;
+  border: 2px solid #8B5CF6;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
+  transition: all 0.2s ease;
+  max-width: calc(100vw - 40px);
+}
+.cs-dashboard-bubble:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 24px rgba(139, 92, 246, 0.5);
+}
+.cs-bubble-logo { font-size: 14px; font-weight: 700; color: #8B5CF6; }
+.cs-bubble-rate { font-size: 11px; font-weight: 600; color: #fff; }
+
+/* ============================================
+   STUDENT STATUS WIDGET - matches wireframe
+   ============================================ */
+
+.cs-student-status {
+  position: fixed;
+  top: 80px;
+  left: 20px;
+  background: #000000;
+  border-radius: 12px;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  min-width: 240px;
+  max-width: calc(100vw - 40px);
+  overflow: hidden;
+}
+
+.cs-status-header {
+  padding: 12px 16px;
+  background: rgba(139, 92, 246, 0.05);
+  cursor: grab;
+}
+.cs-status-header:active { cursor: grabbing; }
+
+.cs-status-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cs-toggle-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+}
+.cs-toggle-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.cs-toggle-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cs-toggle-text {
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 22px;
+}
+.cs-toggle-text.cs-on { color: #8B5CF6; }
+.cs-toggle-text.cs-off { color: #6B7280; }
+
+/* iOS Toggle Switch */
+.cs-toggle-switch {
+  width: 44px; height: 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.3s ease;
+}
+.cs-toggle-switch.on { background: #8B5CF6; }
+.cs-toggle-switch.off { background: #374151; }
+.cs-toggle-knob {
+  position: absolute; top: 2px;
+  width: 20px; height: 20px;
+  background: #fff; border-radius: 50%;
+  transition: left 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+.cs-toggle-switch.on .cs-toggle-knob { left: 22px; }
+.cs-toggle-switch.off .cs-toggle-knob { left: 2px; }
+
+.cs-status-info {
+  font-size: 12px;
+  color: #9CA3AF;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.cs-status-buttons { display: flex; gap: 8px; }
+.cs-link-btn {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: transparent;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.cs-link-btn:hover { background: rgba(255,255,255,0.08); }
+.cs-link-btn.cs-primary {
+  background: #8B5CF6;
+  border-color: #8B5CF6;
+}
+.cs-link-btn.cs-primary:hover { background: #7C3AED; }
+
+/* ============================================
+   STUDENT CONFIRMATION POPUP - matches wireframe
+   ============================================ */
+
+.cs-popup {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 340px;
+  max-width: calc(100vw - 40px);
+  background: #000000;
+  border-radius: 16px;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  animation: cs-popup-bounce 0.4s ease-out;
+  overflow: hidden;
+}
+
+@keyframes cs-popup-bounce {
+  0% { opacity: 0; transform: translate(-50%,-50%) scale(0.9); }
+  50% { transform: translate(-50%,-50%) scale(1.02); }
+  100% { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+}
+
+.cs-popup-header {
+  padding: 12px 16px;
+}
+.cs-popup-body {
+  padding: 20px 24px 24px;
+  text-align: center;
+}
+.cs-popup-emoji {
+  font-size: 28px;
+  display: inline;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.cs-popup-message {
+  color: #ffffff;
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 0;
+  display: inline;
+}
+.cs-popup-actions {
+  display: flex;
+  gap: 16px;
+  padding: 16px 24px 20px;
+}
+.cs-popup-btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+.cs-btn-yes {
+  background: #8B5CF6;
+  color: #fff;
+}
+.cs-btn-yes:hover {
+  background: #7C3AED;
+}
+.cs-btn-no {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #9ca3af;
+}
+.cs-btn-no:hover {
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+}
+
+/* ============================================
+   SUSTAINED CONFUSION ALERT - matches wireframe
+   Red-tinted with Intervene Now / Dismiss buttons
+   ============================================ */
+
+.cs-alert {
+  position: fixed;
+  bottom: 100px;
+  right: 20px;
+  width: 320px;
+  max-width: calc(100vw - 40px);
+  background: linear-gradient(180deg, rgba(60, 0, 0, 0.95), rgba(20, 0, 0, 0.98));
+  border-radius: 14px;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 20px rgba(239, 68, 68, 0.1);
+  animation: cs-alert-slide 0.3s ease-out;
+  overflow: hidden;
+}
+
+@keyframes cs-alert-slide {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.cs-alert-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 14px 10px;
+}
+.cs-alert-icon { font-size: 20px; flex-shrink: 0; }
+.cs-alert-title { flex: 1; }
+.cs-alert-title h3 {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.cs-alert-title p { margin: 0; font-size: 12px; color: #9ca3af; }
+.cs-alert-close {
+  width: 28px; height: 28px;
+  border-radius: 6px; border: none;
+  background: rgba(255,255,255,0.1);
+  color: #9ca3af;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
+.cs-alert-close:hover { background: rgba(255,255,255,0.2); color: #fff; }
+
+.cs-alert-body { padding: 0 14px 12px; }
+.cs-alert-body p {
+  margin: 0;
+  font-size: 13px;
+  color: #d1d5db;
+  line-height: 1.5;
+}
+.cs-alert-body strong { color: #fff; }
+
+.cs-alert-actions {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px 14px;
+}
+.cs-alert-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+.cs-btn-intervene { background: #EF4444; color: #fff; }
+.cs-btn-intervene:hover { background: #DC2626; }
+.cs-btn-dismiss {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #9ca3af;
+}
+.cs-btn-dismiss:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+/* Intervention notification for student */
+.cs-intervention-notice {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #000;
+  border: 1px solid #4ADE80;
+  border-radius: 10px;
+  padding: 12px 20px;
+  color: #4ADE80;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  z-index: 9999999;
+  animation: cs-notice-in 0.3s ease;
+}
+@keyframes cs-notice-in {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* PDF generation overlay */
+.cs-pdf-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.7);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9999999;
+}
+.cs-pdf-loading {
+  background: #111;
+  border: 1px solid rgba(139,92,246,0.3);
+  border-radius: 12px;
+  padding: 24px 32px;
+  text-align: center;
+  color: #fff;
+}
+.cs-pdf-loading-spinner {
+  width: 40px; height: 40px;
+  border: 3px solid rgba(139,92,246,0.2);
+  border-top-color: #8B5CF6;
+  border-radius: 50%;
+  animation: cs-spin 0.8s linear infinite;
+  margin: 0 auto 12px;
+}
+@keyframes cs-spin { to { transform: rotate(360deg); } }
