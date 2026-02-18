@@ -248,3 +248,54 @@ class ConfuSenseFLClient {
   updateLocalModel(model) {
     this.localModel = this.cloneWeights(model.weights);
     this.globalModelVersion = model.version;
+    if (this.onModelUpdated) this.onModelUpdated(model);
+  }
+
+  cloneWeights(weights) {
+    return JSON.parse(JSON.stringify(weights));
+  }
+
+  startPeriodicSync() {
+    this.syncInterval = setInterval(() => this.syncWithServer(), this.options.syncInterval);
+  }
+
+  stopPeriodicSync() {
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
+      this.syncInterval = null;
+    }
+  }
+
+  getStatistics() {
+    return {
+      clientId: this.options.clientId,
+      trainingDataCount: this.trainingData.length,
+      globalModelVersion: this.globalModelVersion,
+      lastSyncTime: this.lastSyncTime,
+      isTraining: this.isTraining,
+      pendingUpdates: (this.pendingUpdates || []).length
+    };
+  }
+
+  getPrivacyGuarantee() {
+    if (!this.options.useDifferentialPrivacy) return { differentialPrivacy: false };
+
+    const epsilon = Math.sqrt(2 * Math.log(1.25 / 1e-5)) / this.options.dpNoiseMultiplier;
+
+    return {
+      differentialPrivacy: true,
+      epsilon: epsilon,
+      delta: 1e-5,
+      noiseMultiplier: this.options.dpNoiseMultiplier,
+      l2NormClip: this.options.dpL2NormClip
+    };
+  }
+
+  destroy() {
+    this.stopPeriodicSync();
+    this.trainingData = [];
+    this.localModel = null;
+  }
+}
+
+window.ConfuSenseFLClient = ConfuSenseFLClient;
