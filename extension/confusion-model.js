@@ -328,7 +328,8 @@ class ConfuSenseDetector {
 
   getCurrentRate() { return this.currentConfusion; }
   getAverageConfusion() { return this.analyzer.getSmoothedConfusion(); }
-  setThreshold(threshold) { this.options.confusionThreshold = threshold; }
+  setThreshold(threshold) { this.options.confusionThreshold = Math.max(10, Math.min(100, threshold)); }
+  setSustainedDuration(ms) { this.options.sustainedDuration = Math.max(5000, ms); }
   dispose() { this.stop(); this.analyzer.reset(); }
 }
 
