@@ -581,6 +581,10 @@ class DOMParser {
     return this.getParticipantsArray().filter(p => p.role === 'student');
   }
 
+  getParticipantCount() {
+    return this.participants.size;
+  }
+
   setParticipantRole(participantId, role) {
     const participant = this.participants.get(participantId);
     if (participant) participant.role = role;
