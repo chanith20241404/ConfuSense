@@ -112,9 +112,12 @@ class HeuristicAnalyzer {
       }
     }
 
-    if (features.brightness !== undefined && features.brightness < 0.3) {
-      score += 10;
+    if (features.brightness !== undefined && features.brightness < 0.25) {
+      score += 12;
       analysis.indicators.lowBrightness = true;
+    } else if (features.brightness !== undefined && features.brightness > 0.9) {
+      score += 5;
+      analysis.indicators.overexposed = true;
     }
 
     if (features.symmetry !== undefined && features.symmetry < 0.6) {
