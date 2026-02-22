@@ -404,10 +404,11 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
 
     print("=" * 60)
-    print("  ConfuSense Server v4.0.0")
+    print("  ConfuSense Server v4.1.0")
     print("  WebSocket Only + Confusion Confirmed + Intervention")
     print("=" * 60)
     print(f"  Port: {port}")
+    print(f"  Database: {DATABASE_PATH}")
     print("=" * 60)
 
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
