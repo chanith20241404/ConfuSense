@@ -122,10 +122,12 @@ def index():
 
 @app.route('/api/health')
 def health():
+    active_count = sum(len(p) for p in active_rooms.values())
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
-        'websocket': True
+        'websocket': True,
+        'active_participants': active_count
     })
 
 
