@@ -269,6 +269,9 @@ def handle_leave_meeting(data):
     if meeting_id and meeting_id in active_rooms:
         if participant_id in active_rooms[meeting_id]:
             del active_rooms[meeting_id][participant_id]
+        if len(active_rooms[meeting_id]) == 0:
+            del active_rooms[meeting_id]
+            logger.info(f"Room {meeting_id} cleaned up — no participants remaining")
 
     leave_room(meeting_id)
     emit('participant_left', {
