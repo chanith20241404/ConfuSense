@@ -32,7 +32,9 @@ class ConfuSenseFLClient {
   }
 
   generateClientId() {
-    return 'client_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+    const random = Math.random().toString(36).substr(2, 9);
+    const timestamp = Date.now().toString(36);
+    return `client_${random}_${timestamp}`;
   }
 
   async initialize(globalWeights = null) {
