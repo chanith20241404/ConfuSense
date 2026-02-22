@@ -299,6 +299,9 @@ class ConfuSenseFLClient {
     this.stopPeriodicSync();
     this.trainingData = [];
     this.localModel = null;
+    this.pendingUpdates = [];
+    this.isTraining = false;
+    console.log('[ConfuSense FL] Client destroyed:', this.options.clientId);
   }
 }
 
