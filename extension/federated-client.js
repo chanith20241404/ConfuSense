@@ -281,13 +281,15 @@ class ConfuSenseFLClient {
     if (!this.options.useDifferentialPrivacy) return { differentialPrivacy: false };
 
     const epsilon = Math.sqrt(2 * Math.log(1.25 / 1e-5)) / this.options.dpNoiseMultiplier;
+    const privacyLevel = epsilon < 1 ? 'strong' : epsilon < 5 ? 'moderate' : 'weak';
 
     return {
       differentialPrivacy: true,
       epsilon: epsilon,
       delta: 1e-5,
       noiseMultiplier: this.options.dpNoiseMultiplier,
-      l2NormClip: this.options.dpL2NormClip
+      l2NormClip: this.options.dpL2NormClip,
+      privacyLevel: privacyLevel
     };
   }
 
