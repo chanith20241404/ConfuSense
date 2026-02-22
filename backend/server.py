@@ -1,8 +1,9 @@
 """
-ConfuSense Backend Server v4.0 — WebSocket Only
+ConfuSense Backend Server v4.1 — WebSocket Only
 ================================================
 Flask + Flask-SocketIO
 Added: confusion_confirmed, intervention events
+Optimized: room cleanup, health endpoint, database indexes
 """
 
 import eventlet
