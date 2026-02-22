@@ -470,6 +470,9 @@
   background: rgba(255,255,255,0.12);
   color: #fff;
 }
+.cs-popup-btn:active {
+  transform: scale(0.96);
+}
 
 /* ============================================
    SUSTAINED CONFUSION ALERT - matches wireframe
