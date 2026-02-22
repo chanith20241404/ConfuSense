@@ -708,6 +708,7 @@ class ConfuSenseApp {
     if (this.syncInterval) {
       clearInterval(this.syncInterval);
       this.syncInterval = null;
+      console.log('[ConfuSense] Sync interval stopped');
     }
   }
 
