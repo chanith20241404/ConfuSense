@@ -520,7 +520,7 @@ class UIInjector {
     this.popupTimeout = setTimeout(() => {
       this.hideStudentPopup();
       if (onResponse) onResponse(true, true);
-    }, 15000);
+    }, 20000);
   }
 
   hideStudentPopup() {
