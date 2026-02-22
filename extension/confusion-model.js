@@ -145,16 +145,16 @@ class HeuristicAnalyzer {
 
   getSmoothedConfusion() {
     if (this.history.length === 0) return 0;
-    
+
     let weightedSum = 0;
     let weightTotal = 0;
-    
+
     this.history.forEach((analysis, index) => {
-      const weight = index + 1;
+      const weight = (index + 1) * (index + 1);
       weightedSum += analysis.confusionScore * weight;
       weightTotal += weight;
     });
-    
+
     return Math.round(weightedSum / weightTotal);
   }
 
