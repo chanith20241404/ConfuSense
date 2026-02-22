@@ -192,10 +192,12 @@ def handle_disconnect():
     for meeting_id, participants in list(active_rooms.items()):
         for pid, pdata in list(participants.items()):
             if pdata.get('sid') == request.sid:
+                participant_name = pdata.get('name', 'Unknown')
                 del active_rooms[meeting_id][pid]
+                logger.info(f"Auto-removed {participant_name} from {meeting_id} on disconnect")
                 emit('participant_left', {
                     'participant_id': pid,
-                    'participant_name': pdata.get('name', 'Unknown')
+                    'participant_name': participant_name
                 }, room=meeting_id)
 
 
