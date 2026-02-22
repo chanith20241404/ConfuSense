@@ -43,7 +43,7 @@ class ConfuSenseApp {
   }
 
   async init() {
-    console.log('[ConfuSense] Initializing v4.0.0...');
+    console.log('[ConfuSense] Initializing v4.1.0...');
     
     try {
       await this.loadSettings();
