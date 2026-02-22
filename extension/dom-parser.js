@@ -559,12 +559,16 @@ class DOMParser {
   }
 
   startPeriodicCheck() {
+    let checkCount = 0;
     this.checkInterval = setInterval(() => {
+      checkCount++;
       this.detectMeetingState();
       if (this.isInMeeting) {
         if (!this.selfInfo?.name) this.identifySelf();
         this.parseAllParticipants();
-        this.identifyHost();
+        if (!this.hostNotified || checkCount % 6 === 0) {
+          this.identifyHost();
+        }
       }
     }, 5000);
   }
