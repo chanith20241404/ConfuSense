@@ -97,8 +97,10 @@ def init_db():
     ''')
 
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_ps_meeting ON participant_status(meeting_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_ps_participant ON participant_status(participant_id)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_meeting ON sessions(meeting_id)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_ce_meeting ON confusion_events(meeting_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_ce_participant ON confusion_events(participant_id)')
 
     conn.commit()
     conn.close()
