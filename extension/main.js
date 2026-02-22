@@ -146,8 +146,9 @@ class ConfuSenseApp {
         transports: ['websocket', 'polling'],
         timeout: 10000,
         reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000
       });
       
       this.socket.on('connect', () => {
