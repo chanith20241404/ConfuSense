@@ -163,6 +163,11 @@
 .cs-participant.high-confusion {
   border-color: rgba(239, 68, 68, 0.6);
   box-shadow: 0 0 10px rgba(239, 68, 68, 0.1);
+  animation: cs-high-confusion-pulse 2s ease-in-out infinite;
+}
+@keyframes cs-high-confusion-pulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.1); }
+  50% { box-shadow: 0 0 18px rgba(239, 68, 68, 0.25); }
 }
 
 /* Avatar Circle - colored circle with white initials (matches wireframe) */
