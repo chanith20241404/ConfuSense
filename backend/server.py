@@ -114,9 +114,10 @@ init_db()
 def index():
     return jsonify({
         'name': 'ConfuSense API',
-        'version': '4.0.0',
+        'version': '4.1.0',
         'websocket': True,
-        'rest_fallback': False
+        'rest_fallback': False,
+        'active_rooms': len(active_rooms)
     })
 
 
