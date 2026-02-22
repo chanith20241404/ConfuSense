@@ -64,7 +64,9 @@ class UIInjector {
 
   getInitials(name) {
     if (!name) return '??';
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    const parts = name.trim().split(/\s+/).filter(n => n.length > 0);
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return parts.map(n => n[0]).join('').toUpperCase().slice(0, 2);
   }
 
   getAvatarColor(name) {
