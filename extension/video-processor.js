@@ -144,20 +144,32 @@ class ConfuSenseVideoProcessor {
   }
 
   detectMotion(currentFrame) {
-    if (!this.previousFrame) return { hasMotion: false, magnitude: 0 };
+    if (!this.previousFrame) return { hasMotion: false, magnitude: 0, direction: 'none' };
 
     const current = currentFrame.data;
     const previous = this.previousFrame.data;
-    
-    let diffSum = 0;
-    const pixelCount = current.length / 4;
+    const width = currentFrame.width;
+    const height = currentFrame.height;
 
-    for (let i = 0; i < current.length; i += 4) {
-      diffSum += Math.abs(current[i] - previous[i]);
+    let diffSum = 0;
+    let leftDiff = 0;
+    let rightDiff = 0;
+    const pixelCount = current.length / 4;
+    const halfWidth = Math.floor(width / 2);
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        const diff = Math.abs(current[i] - previous[i]);
+        diffSum += diff;
+        if (x < halfWidth) leftDiff += diff;
+        else rightDiff += diff;
+      }
     }
 
     const avgDiff = diffSum / pixelCount;
-    return { hasMotion: avgDiff > 10, magnitude: avgDiff / 255 };
+    const direction = leftDiff > rightDiff * 1.3 ? 'left' : rightDiff > leftDiff * 1.3 ? 'right' : 'center';
+    return { hasMotion: avgDiff > 10, magnitude: avgDiff / 255, direction };
   }
 
   getCanvas() { return this.canvas; }
