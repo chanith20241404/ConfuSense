@@ -1076,12 +1076,16 @@ class ConfuSenseApp {
 
   exportSessionData() {
     const students = this.getActiveStudentsArray();
+    const sessionDuration = this.state.sessionStartTime
+      ? Math.round((Date.now() - this.state.sessionStartTime) / 1000)
+      : 0;
     const csv = [
-      ['Name', 'Confusion Rate', 'Detection Enabled', 'Timestamp'],
+      ['Name', 'Confusion Rate', 'Detection Enabled', 'Session Duration (s)', 'Timestamp'],
       ...students.map(s => [
         s.name,
         Math.round(s.confusionRate || 0),
         s.detectionEnabled ? 'Yes' : 'No',
+        sessionDuration,
         new Date().toISOString()
       ])
     ].map(row => row.join(',')).join('\n');
