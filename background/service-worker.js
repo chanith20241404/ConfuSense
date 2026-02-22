@@ -21,3 +21,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   console.log('[ConfuSense] Tab closed:', tabId);
 });
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.url && !changeInfo.url.includes('meet.google.com')) {
+    chrome.action.setBadgeText({ tabId, text: '' });
+  }
+});
