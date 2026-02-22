@@ -71,10 +71,15 @@ class PopupController {
           const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_STATE' });
           const statusBar = document.getElementById('statusBar');
           const statusText = document.getElementById('statusText');
-          
+
           if (response?.isInMeeting) {
             statusBar.classList.add('visible');
-            statusText.textContent = response.role === 'tutor' ? 'Dashboard active' : 'Monitoring active';
+            const participantCount = response.participants?.length || 0;
+            if (response.role === 'tutor') {
+              statusText.textContent = `Dashboard active — ${participantCount} student${participantCount !== 1 ? 's' : ''}`;
+            } else {
+              statusText.textContent = 'Monitoring active';
+            }
           } else {
             statusBar.classList.remove('visible');
           }
