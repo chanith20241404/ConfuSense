@@ -609,8 +609,13 @@ class DOMParser {
 
   destroy() {
     this.observers.forEach(obs => obs.disconnect());
+    this.observers = [];
     if (this.checkInterval) clearInterval(this.checkInterval);
     if (this.parseTimeout) clearTimeout(this.parseTimeout);
+    this.participants.clear();
+    this.selfInfo = null;
+    this.hostInfo = null;
+    console.log('[ConfuSense DOM] Parser destroyed and cleaned up');
   }
 }
 
