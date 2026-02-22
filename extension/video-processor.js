@@ -174,6 +174,15 @@ class ConfuSenseVideoProcessor {
 
   getCanvas() { return this.canvas; }
 
+  getStatus() {
+    return {
+      isReady: this.isReady,
+      hasPreviousFrame: this.previousFrame !== null,
+      captureSize: this.config.captureSize,
+      targetSize: this.config.targetSize
+    };
+  }
+
   destroy() {
     this.canvas = null;
     this.ctx = null;
