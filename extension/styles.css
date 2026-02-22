@@ -143,6 +143,8 @@
   color: #6B7280;
   font-size: 13px;
   padding: 24px 16px;
+  font-style: italic;
+  opacity: 0.8;
 }
 
 .cs-participant {
