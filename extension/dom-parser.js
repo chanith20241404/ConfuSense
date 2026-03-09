@@ -378,3 +378,103 @@
       const lc = rawText.toLowerCase();
       if (lc.includes('waiting') || lc.includes('admit') || lc.includes('deny')) {
         node = walker.nextNode();
+        continue;
+      }
+
+      const name = cleanName(rawText);
+      if (name && !names.includes(name)) {
+        names.push(name);
+      }
+
+      node = walker.nextNode();
+    }
+
+    return names;
+  }
+
+  // ── In-meeting detection ──
+
+  const IN_MEETING_SIGNALS = [
+    '[data-is-muted]',                              // mic button attribute
+    'button[aria-label*="microphone" i]',
+    'button[aria-label*="Leave call" i]',
+    '[data-tooltip*="Leave call" i]',
+    '[jsname="CQylAd"]',                            // Leave button (stable jsname)
+  ];
+
+  const PRE_JOIN_SIGNALS = [
+    'button[jsname="Qx7uuf"]',                     // "Join now" button
+    '[aria-label*="Join now" i]',
+    '[aria-label*="Ask to join" i]',
+  ];
+
+  function hasMeetingUrl() {
+    return /\/[a-z]{3}-[a-z]{4}-[a-z]{3}/i.test(window.location.pathname);
+  }
+
+  function hasControls() {
+    return IN_MEETING_SIGNALS.some(s => document.querySelector(s));
+  }
+
+  function hasPreJoin() {
+    return PRE_JOIN_SIGNALS.some(s => document.querySelector(s));
+  }
+
+  function isInMeeting() {
+    if (!hasMeetingUrl()) return false;
+    if (!hasControls()) return false;
+    return !hasPreJoin();
+  }
+
+  function getMeetingId() {
+    const m = window.location.pathname.match(/\/([a-z]{3}-[a-z]{4}-[a-z]{3})/i);
+    return m ? m[1] : `meet_${Date.now()}`;
+  }
+
+  // ── Main parser class ──
+
+  class ConfuSenseDOMParser {
+    constructor() {
+      this.callbacks     = {};
+      this.participants  = new Map();   // id → { id, name, role, joinedAt }
+      this.selfInfo      = { name: null, isHost: false };
+      this.hostName      = null;
+      this.inMeeting     = false;
+      this.meetingId     = null;
+      this._pollTimer    = null;
+    }
+
+    setCallbacks(cbs) { this.callbacks = { ...this.callbacks, ...cbs }; }
+
+    init() {
+      log('Starting (Internal State Edition)');
+      this._tick();
+      // Poll every 1s — fast enough to catch joins/leaves promptly
+      this._pollTimer = setInterval(() => this._tick(), 1000);
+    }
+
+    destroy() {
+      clearInterval(this._pollTimer);
+      _cachedPath = null;
+      _cachedRoot = null;
+    }
+
+    isSelfHost()  { return this.selfInfo.isHost; }
+    getSelfName() { return this.selfInfo.name; }
+
+    _tick() {
+      if (!this.inMeeting) {
+        if (isInMeeting()) {
+          this.inMeeting = true;
+          this.meetingId = getMeetingId();
+          this._resolveSelfAndHost();
+          this._scanParticipants();
+          log(`Entered meeting: ${this.meetingId}`);
+          this.callbacks.onMeetingStart?.({
+            meetingId: this.meetingId,
+            selfName:  this.selfInfo.name,
+            isHost:    this.selfInfo.isHost,
+          });
+        }
+        return;
+      }
