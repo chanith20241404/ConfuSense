@@ -78,3 +78,72 @@ confusense/
 │       ├── gemini/         Gemini client with retry
 │       ├── queue/          NATS JetStream publisher + consumer
 │       ├── config.ts       Zod env validation
+│       └── index.ts        Express app entry
+│
+├── dashboard/              React 18 + TypeScript + Vite
+│   └── src/
+│       ├── pages/          Home (meeting list), Meeting (per-student scores)
+│       ├── components/     MeetingCard, StudentRow, EngagementBadge
+│       └── lib/api.ts      Typed fetch wrappers
+│
+├── landing page/           React 18 + Vite (marketing site)
+├── docker-compose.yml
+└── .env.example
+```
+
+## API Reference
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/sessions/join` | Register joining a meeting `{uuid, role, meetingId}` |
+| POST | `/api/frames` | Submit a webcam frame for scoring `{uuid, meetingId, frame}` |
+| GET | `/api/notifications/:uuid` | Poll for notifications (marks as read) |
+| POST | `/api/responses/:uuid` | Student engagement response `{meetingId, engaged}` |
+| GET | `/api/dashboard` | List active meetings (last 2 hours) |
+| GET | `/api/dashboard/:meetingId` | Per-student engagement for a meeting |
+
+## Development
+
+**Package manager: bun**
+
+```bash
+# Backend
+cd backend
+bun install
+bun run dev          # tsx watch (hot reload)
+bun run tsc --noEmit # type check
+
+# Dashboard
+cd dashboard
+bun install
+bun run dev          # Vite dev server on :4000
+
+# After backend code changes (Docker)
+docker compose up --build -d backend
+
+# Watch backend logs
+docker compose logs -f backend
+```
+
+## Engagement Score Colors
+
+| Score | Color | Meaning |
+|-------|-------|---------|
+| ≥ 0.7 | 🟢 Green | Engaged |
+| 0.5–0.7 | 🟡 Yellow | Partially engaged |
+| < 0.5 | 🔴 Red | Disengaged — notification sent |
+
+---
+
+## Team — SE Group 06 Subgroup 11
+
+| Member | Role |
+|--------|------|
+| Chanith Thewnaka | Team Lead, ML Pipeline |
+| Faraz Ahamed | Extension Development |
+| Rashmi Pathiraja | Dashboard & Analytics |
+| Manojkumar Tejeas | Backend & API |
+| Nethya Fernando | Federated Learning & Privacy |
+| Nisanda Gunasinha | Testing & Logging |
+
+**SDGP 2025/26 — Informatics Institute of Technology / University of Westminster**
