@@ -288,3 +288,93 @@
       if (row.textContent.includes('(You)')) {
         const n = cleanName(nameTextFromEl(row).replace(/\(You\)/gi, ''));
         if (n) return n;
+      }
+    }
+
+    return null;
+  }
+
+  function detectHostName() {
+    for (const row of document.querySelectorAll('[role="listitem"]')) {
+      const t = row.textContent;
+      if (t.includes('(Host)') || t.includes('(Organizer)') || t.includes('(Organiser)')) {
+        const n = cleanName(nameTextFromEl(row));
+        if (n) return n;
+      }
+    }
+
+    // Check video tiles too
+    for (const tile of document.querySelectorAll('[data-participant-id]')) {
+      const t = tile.textContent;
+      if (t.includes('(Host)') || t.includes('(Organizer)') || t.includes('(Organiser)')) {
+        const n = cleanName(nameTextFromEl(tile));
+        if (n) return n;
+      }
+    }
+
+    return null;
+  }
+
+  // ── DOM fallback — People Panel scanner ──
+
+  function getParticipantNamesFromDOM() {
+    const names = [];
+
+    // Find the People panel
+    const panelSelectors = [
+      '[aria-label="People"]',
+      '[aria-label*="participants" i]',
+      '[aria-label*="people" i]',
+    ];
+
+    let panel = null;
+    for (const sel of panelSelectors) {
+      panel = document.querySelector(sel);
+      if (panel) break;
+    }
+
+    if (!panel) return names;
+
+    let inWaitingSection = false;
+
+    const walker = document.createTreeWalker(panel, NodeFilter.SHOW_ELEMENT);
+    let node = walker.nextNode();
+
+    while (node) {
+      const el = node;
+
+      // Section headings separate "In the meeting" from "Waiting to join"
+      const isHeading = el.getAttribute('role') === 'heading' ||
+                        ['H1','H2','H3','H4'].includes(el.tagName);
+
+      if (isHeading) {
+        const headingText = el.textContent.toLowerCase();
+        if (headingText.includes('waiting')) {
+          inWaitingSection = true;
+        } else if (headingText.includes('in the meeting') || headingText.includes('in meeting')) {
+          inWaitingSection = false;
+        }
+        node = walker.nextNode();
+        continue;
+      }
+
+      if (el.getAttribute('role') !== 'listitem') {
+        node = walker.nextNode();
+        continue;
+      }
+
+      if (inWaitingSection) {
+        node = walker.nextNode();
+        continue;
+      }
+
+      const rawText = nameTextFromEl(el) || '';
+
+      if (hasExcludeMarker(rawText)) {
+        node = walker.nextNode();
+        continue;
+      }
+
+      const lc = rawText.toLowerCase();
+      if (lc.includes('waiting') || lc.includes('admit') || lc.includes('deny')) {
+        node = walker.nextNode();
