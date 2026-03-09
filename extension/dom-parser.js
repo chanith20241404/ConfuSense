@@ -198,3 +198,93 @@
   function extractNameFromRecord(record) {
     if (!record || typeof record !== 'object') return null;
 
+    for (const prop of Object.keys(record)) {
+      const val = record[prop];
+      // Pattern: val is an array/object where val[1] is a non-empty string
+      if (val && typeof val === 'object' && typeof val[1] === 'string' && val[1].length > 0) {
+        return val[1];
+      }
+    }
+    return null;
+  }
+
+  function getParticipantNamesFromState() {
+    try {
+      // Find the closure root
+      const closureEntry = Object.entries(window).find(
+        ([k]) => k.startsWith('closure_lm_')
+      );
+      if (!closureEntry) return null;
+
+      const rootState = closureEntry[1];
+
+      // Fast path: use cached path from previous successful lookup
+      let records = followCachedPath(rootState);
+
+      // Slow path: full DFS (only runs once, or when path goes stale)
+      if (!records) {
+        records = findParticipantRecords(rootState);
+        if (records) _cachedRoot = rootState; // bind cache to this root
+      }
+
+      if (!records || records.length === 0) return null;
+
+      const names = [];
+      for (const record of records) {
+        const name = extractNameFromRecord(record);
+        if (name && !names.includes(name)) {
+          names.push(name);
+        }
+      }
+
+      return names.length > 0 ? names : null;
+
+    } catch (e) {
+      warn('Internal state read failed:', e.message);
+      // Invalidate cache on error
+      _cachedPath = null;
+      _cachedRoot = null;
+      return null;
+    }
+  }
+
+  // ── Host & self detection ──
+
+  function detectIsHost() {
+    for (const label of HOST_ONLY_ARIA) {
+      if (document.querySelector(`[aria-label*="${label}"]`) ||
+          document.querySelector(`[data-tooltip*="${label}"]`)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function detectSelfName() {
+    // 1. data-self-name attribute
+    const selfAttr = document.querySelector('[data-self-name]');
+    if (selfAttr) {
+      const n = (selfAttr.getAttribute('data-self-name') || '').trim();
+      if (n.length >= MIN_NAME_LEN) return n;
+    }
+
+    // 2. data-is-local tile
+    const localTile = document.querySelector('[data-participant-id][data-is-local="true"]');
+    if (localTile) {
+      const n = cleanName(nameTextFromEl(localTile));
+      if (n) return n;
+    }
+
+    // 3. Any tile whose text includes "(You)"
+    for (const tile of document.querySelectorAll('[data-participant-id]')) {
+      if (tile.textContent.includes('(You)')) {
+        const n = cleanName(nameTextFromEl(tile).replace(/\(You\)/gi, ''));
+        if (n) return n;
+      }
+    }
+
+    // 4. People panel row with "(You)"
+    for (const row of document.querySelectorAll('[role="listitem"]')) {
+      if (row.textContent.includes('(You)')) {
+        const n = cleanName(nameTextFromEl(row).replace(/\(You\)/gi, ''));
+        if (n) return n;
