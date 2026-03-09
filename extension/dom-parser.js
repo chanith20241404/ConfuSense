@@ -58,3 +58,73 @@
       return !tooltipBlocklist.some(w => lc.includes(w));
     }
 
+    const tooltip = el.getAttribute('data-tooltip');
+    if (isNameTooltip(tooltip)) return tooltip;
+
+    for (const child of el.querySelectorAll('[data-tooltip]')) {
+      const tt = child.getAttribute('data-tooltip');
+      if (isNameTooltip(tt)) return tt;
+    }
+
+    // 2. First leaf text container
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_ELEMENT, {
+      acceptNode(node) {
+        const tag = node.tagName;
+        if (tag === 'BUTTON' || tag === 'SVG' || tag === 'IMG') return NodeFilter.FILTER_REJECT;
+        if (node.getAttribute('role') === 'button') return NodeFilter.FILTER_REJECT;
+        // Accept if this element has text content and no interactive children
+        if ((tag === 'SPAN' || tag === 'DIV') && node.textContent.trim().length >= MIN_NAME_LEN) {
+          const hasInteractive = node.querySelector('button, svg, [role="button"], [data-iml]');
+          if (!hasInteractive) return NodeFilter.FILTER_ACCEPT;
+        }
+        return NodeFilter.FILTER_SKIP;
+      }
+    });
+    const firstTextEl = walker.nextNode();
+    if (firstTextEl) {
+      const t = firstTextEl.textContent.trim();
+      if (t.length >= MIN_NAME_LEN) return t;
+    }
+
+    // 3. Fallback — first text node outside interactive elements
+    const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        const p = node.parentElement;
+        if (!p) return NodeFilter.FILTER_REJECT;
+        if (p.closest('button, svg, img, [role="button"], [role="img"], [data-iml]'))
+          return NodeFilter.FILTER_REJECT;
+        return (node.textContent.trim().length > 0)
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_SKIP;
+      }
+    });
+    const firstText = tw.nextNode();
+    return firstText ? firstText.textContent.trim() : (el.textContent || '');
+  }
+
+  // Clean a raw string into a participant name
+  function cleanName(raw) {
+    if (!raw || typeof raw !== 'string') return '';
+
+    let s = raw;
+
+    // Strip role markers
+    for (const m of EXCLUDE_MARKERS) {
+      s = s.replace(new RegExp(m.replace(/[()?]/g, '\\$&'), 'gi'), '');
+    }
+
+    s = s.split(/\s+/)
+         .filter(w => !JUNK_WORDS.has(w.toLowerCase()))
+         .join(' ')
+         .trim();
+
+    // Keep only printable letters, spaces, hyphens, apostrophes
+    s = s.replace(/[^\p{L}\p{M}\s\-'.]/gu, '').replace(/\s{2,}/g, ' ').trim();
+
+    if (s.length < MIN_NAME_LEN || s.length > MAX_NAME_LEN) return '';
+
+    if (UI_ARTIFACT_PHRASES.includes(s.toLowerCase())) return '';
+
+    return s;
+  }
+
