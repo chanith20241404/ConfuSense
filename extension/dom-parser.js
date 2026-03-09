@@ -128,3 +128,73 @@
     return s;
   }
 
+  function hasExcludeMarker(raw) {
+    const lc = (raw || '').toLowerCase();
+    return EXCLUDE_MARKERS.some(m => lc.includes(m));
+  }
+
+  // ── Internal state extraction ──
+  // Walks window.closure_lm_<hash> to find participant records keyed by ["spaces/..."]
+  let _cachedPath = null;   // array of property keys from closure root → container
+  let _cachedRoot = null;   // the closure root object the path was found on
+
+  function followCachedPath(root) {
+    if (!_cachedPath || _cachedRoot !== root) return null;
+    let cur = root;
+    try {
+      for (const key of _cachedPath) {
+        cur = cur[key];
+        if (cur === null || cur === undefined || typeof cur !== 'object') return null;
+      }
+      // Validate: first key should still start with '["spaces/'
+      const firstKey = Object.keys(cur)[0];
+      if (firstKey && firstKey.startsWith('["spaces/')) return Object.values(cur);
+    } catch (e) { /* path stale */ }
+    return null;
+  }
+
+  function findParticipantRecords(obj, depth = 0, maxDepth = 8, seen = null, path = null) {
+    if (depth > maxDepth) return null;
+    if (obj === null || obj === undefined) return null;
+    if (typeof obj !== 'object') return null;
+    if (obj === window || obj === document) return null;
+    if (obj instanceof Node) return null;
+
+    // Prevent revisiting the same object (cycles / shared refs)
+    if (!seen) seen = new WeakSet();
+    if (seen.has(obj)) return null;
+    seen.add(obj);
+
+    if (!path) path = [];
+
+    let keys;
+    try {
+      keys = Object.keys(obj);
+    } catch (e) {
+      return null;
+    }
+
+    for (const prop of keys) {
+      if (prop.startsWith('["spaces/')) {
+        // Cache the path for fast future lookups
+        _cachedPath = path.slice();
+        _cachedRoot = null; // set by caller
+        return Object.values(obj);
+      }
+
+      let val;
+      try { val = obj[prop]; } catch (e) { continue; }
+      if (val === null || val === undefined || typeof val !== 'object') continue;
+
+      path.push(prop);
+      const found = findParticipantRecords(val, depth + 1, maxDepth, seen, path);
+      if (found !== null) return found;
+      path.pop();
+    }
+
+    return null;
+  }
+
+  function extractNameFromRecord(record) {
+    if (!record || typeof record !== 'object') return null;
+
