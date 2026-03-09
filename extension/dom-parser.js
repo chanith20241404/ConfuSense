@@ -478,3 +478,107 @@
         }
         return;
       }
+
+      // Only exit on hard signals (URL change or pre-join reappears)
+      if (!hasMeetingUrl() || hasPreJoin()) {
+        this.inMeeting = false;
+        const id = this.meetingId;
+        this.participants.clear();
+        this.meetingId = null;
+        this.hostName  = null;
+        log('Meeting ended');
+        this.callbacks.onMeetingEnd?.({ meetingId: id });
+        return;
+      }
+
+      if (!this.selfInfo.name) this._resolveSelfAndHost();
+
+      if (!this.selfInfo.isHost && detectIsHost()) {
+        this.selfInfo.isHost = true;
+        log('Host detected late — upgrading role');
+        this.callbacks.onHostDetected?.({ name: this.selfInfo.name });
+        this.callbacks.onHostUpgrade?.({ name: this.selfInfo.name });
+      }
+
+      this._scanParticipants();
+    }
+
+    _resolveSelfAndHost() {
+      this.selfInfo.name   = detectSelfName();
+      this.selfInfo.isHost = detectIsHost();
+      this.hostName        = detectHostName() || this.selfInfo.name;
+
+      if (this.selfInfo.name) {
+        log(`Self="${this.selfInfo.name}" isHost=${this.selfInfo.isHost}`);
+        if (this.selfInfo.isHost) {
+          this.callbacks.onHostDetected?.({ name: this.selfInfo.name });
+        }
+      }
+    }
+
+    _scanParticipants() {
+      let rawNames = getParticipantNamesFromState();
+      const source  = rawNames ? 'state' : 'DOM';
+
+      if (!rawNames) {
+        rawNames = getParticipantNamesFromDOM();
+        if (rawNames.length > 0 && !this._loggedDomFallback) {
+          this._loggedDomFallback = true;
+          log(`Using DOM fallback (${rawNames.length} names)`);
+        }
+      } else {
+        this._loggedDomFallback = false;
+      }
+
+      if (!rawNames || rawNames.length === 0) return;
+
+      const studentNames = rawNames
+        .map(n => cleanName(n))
+        .filter(n => n.length >= MIN_NAME_LEN)
+        .filter(n => !hasExcludeMarker(n))
+        .filter(n => !this._isSelf(n))
+        .filter(n => !this._isHost(n));
+
+      const currentIds = new Set();
+
+      for (const name of studentNames) {
+        const id = `student_${name.toLowerCase().replace(/\s+/g, '_')}`;
+        currentIds.add(id);
+
+        if (!this.participants.has(id)) {
+          const p = { id, name, role: 'student', joinedAt: Date.now() };
+          this.participants.set(id, p);
+          log(`JOIN (${source}): "${name}"`);
+          this.callbacks.onParticipantJoin?.(p);
+        }
+      }
+
+      for (const [id, p] of this.participants) {
+        if (!currentIds.has(id)) {
+          this.participants.delete(id);
+          log(`LEAVE: "${p.name}"`);
+          this.callbacks.onParticipantLeave?.(p);
+        }
+      }
+    }
+
+    _isSelf(name) {
+      if (!this.selfInfo.name) return false;
+      return name.trim().toLowerCase() === this.selfInfo.name.trim().toLowerCase();
+    }
+
+    _isHost(name) {
+      if (!name) return false;
+      const lc = name.trim().toLowerCase();
+
+      // If we detected a host name from the "(Host)" DOM marker, filter that name
+      if (this.hostName && lc === this.hostName.trim().toLowerCase()) return true;
+
+      return false;
+    }
+  }
+
+  window.ConfuSenseDOMParser = ConfuSenseDOMParser;
+  log('Loaded (Internal State Edition)');
+
+})();
