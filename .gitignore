@@ -1,0 +1,17 @@
+node_modules/
+package-lock.json
+dist/
+.env
+*.log
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+sqld_data/
+*.pem
+*.key
+credentials.json
+docker_backend_logs.txt
