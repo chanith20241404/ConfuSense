@@ -548,3 +548,63 @@ class ConfuSenseApp {
 
     this.state.currentConfusionStart = timestamp;
     this.state.confusionEvents.push({
+      timestamp,
+      durationMs:       0,
+      intervened:       false,
+      confirmationRate: 0.75
+    });
+
+    const body = { meetingId: this.state.meetingId, timestamp };
+    if (this.state.selfName) body.studentName = this.state.selfName;
+    await this.post(`/api/confusion/${this.uuid}`, body);
+  }
+
+  onConfusionNotification(payload) {
+    if (this.state.role !== 'tutor') return;
+    const name = payload.studentName || payload.studentUuid?.slice(0, 8) || 'Unknown';
+
+    let studentId = this.findStudentByName(name);
+    if (!studentId) {
+      for (const [id, s] of this.state.students) {
+        if (s.uuid === payload.studentUuid) { studentId = id; break; }
+      }
+    }
+
+    if (studentId) {
+      const student = this.state.students.get(studentId);
+      if (student) {
+        student.confirmedEvents = (student.confirmedEvents || 0) + 1;
+        student.isConfused      = true;
+        student.showAlert       = !student.interventionActive;
+        student.alertDismissed  = false;
+        student.confusionEvents = student.confusionEvents || [];
+        student.confusionEvents.push({
+          timestamp:        payload.timestamp || Date.now(),
+          durationMs:       0,
+          intervened:       false,
+          confirmationRate: 0.75
+        });
+        this.updateStudentConfusionPct(student);
+      }
+    }
+
+    this.ui.updateDashboard(this.getStudentsArray());
+    console.log(`[ConfuSense] ${name} confirmed confusion`);
+  }
+
+  onDisengagementNotification(payload) {
+    if (this.state.role !== 'tutor') return;
+    const uuid = payload.studentUuid;
+
+    for (const [, student] of this.state.students) {
+      if (student.uuid === uuid) {
+        student.isConfused = true;
+        // Respect global intervention cooldown — don't show alert during cooldown
+        student.showAlert  = Date.now() >= this._interventionCooldownUntil;
+        break;
+      }
+    }
+    this.ui.updateDashboard(this.getStudentsArray());
+  }
+
+  onDetectionStatus(payload) {
