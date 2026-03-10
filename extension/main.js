@@ -98,3 +98,73 @@ class ConfuSenseApp {
         this.settings.enabled = enabled;
         chrome.storage.local.set({ confusenseSettings: this.settings });
 
+        if (enabled && this.state.role === 'student' && this.state.isInMeeting) {
+          // Start camera without recreating the widget (toggle UI already updated)
+          if (!this.videoProc) {
+            try {
+              this.videoProc = new window.ConfuSenseVideoProcessor();
+              this.videoProc.onCameraLost = () => this.handleCameraLost();
+              await this.videoProc.start(this.uuid, this.state.meetingId, this.settings.serverUrl);
+              console.log('[ConfuSense] Video processing started');
+              // Re-apply intervention pause if still active
+              if (Date.now() < this._framePauseUntil) {
+                this.videoProc.pause();
+              }
+            } catch (e) {
+              console.error('[ConfuSense] Camera access denied:', e.message);
+              this.videoProc = null;
+              this.settings.enabled = false;
+              chrome.storage.local.set({ confusenseSettings: this.settings });
+              this.ui.updateStudentStatus(false);
+              return;
+            }
+          }
+        } else if (!enabled) {
+          if (this.videoProc) { this.videoProc.stop(); this.videoProc = null; }
+          this.state.confusionStartTime = null;
+          if (this.state.popupShowing) {
+            this.ui.hidePopup?.();
+            this.state.popupShowing = false;
+          }
+        }
+        // Sync detection status to backend so tutor dashboard shows it
+        if (this.state.isInMeeting && this.state.meetingId) {
+          this.syncDetectionStatus(enabled);
+        }
+      }
+    });
+    this.ui.init();
+
+    this.domParser = new window.ConfuSenseDOMParser();
+    this.domParser.setCallbacks({
+      onMeetingStart:    (d) => this.onMeetingStart(d),
+      onMeetingEnd:      (d) => this.onMeetingEnd(d),
+      onParticipantJoin: (p) => this.onParticipantJoin(p),
+      onParticipantLeave:(p) => this.onParticipantLeave(p),
+      onHostDetected:    (h) => this.onHostDetected(h),
+      onHostUpgrade:     ()  => this.onHostUpgrade()
+    });
+
+    this.domParser.init();
+
+    chrome.runtime.onMessage.addListener((msg, _, respond) => {
+      this.handleExtensionMessage(msg, respond);
+      return true;
+    });
+
+    console.log('[ConfuSense] Initialised, UUID:', this.uuid.slice(0, 8) + '…');
+  }
+
+  async loadSettings() {
+    try {
+      const res = await chrome.storage.local.get(['confusenseSettings']);
+      if (res.confusenseSettings) {
+        this.settings = { ...this.settings, ...res.confusenseSettings };
+      }
+    } catch (e) { /* use defaults */ }
+  }
+
+  onMeetingStart(data) {
+    console.log('[ConfuSense] Meeting started:', data.meetingId);
+    this.state.isInMeeting    = true;
+    this.state.meetingId      = data.meetingId;
