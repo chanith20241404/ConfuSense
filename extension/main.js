@@ -248,3 +248,73 @@ class ConfuSenseApp {
   }
 
   onParticipantJoin(p) {
+    if (this.state.role !== 'tutor') return;
+    if (this.state.students.has(p.id)) return;
+
+    const existingId = this.findStudentByName(p.name);
+    if (existingId) return;
+
+    const nameKey = p.name?.toLowerCase().trim();
+    const pending = this.pendingDetectionStatuses.get(nameKey);
+    const detectionOn = pending !== undefined ? pending : true; // default ON until server says otherwise
+    if (pending !== undefined) this.pendingDetectionStatuses.delete(nameKey);
+
+    // Check if there's a UUID in the map that points to this student name
+    // (from server data received before DOM detected them)
+    let linkedUuid = null;
+    for (const [uuid, localId] of this._uuidMap) {
+      if (localId === p.id) { linkedUuid = uuid; break; }
+    }
+
+    this.state.students.set(p.id, {
+      ...p,
+      uuid:                linkedUuid,
+      isConfused:          false,
+      detectionEnabled:    detectionOn,
+      sessionConfusionPct: 0,
+      confirmedEvents:     0,
+      confusionEvents:     [],
+      showAlert:           false,
+      alertDismissed:      false,
+      dismissedUntil:      0,
+    });
+    this.ui.updateDashboard(this.getStudentsArray());
+  }
+
+  onParticipantLeave(p) {
+    if (this.state.role !== 'tutor') return;
+    let removedId = null;
+    if (this.state.students.has(p.id)) {
+      removedId = p.id;
+    } else {
+      removedId = this.findStudentByName(p.name);
+    }
+    if (removedId) {
+      // Clean UUID map entries pointing to this student
+      const student = this.state.students.get(removedId);
+      if (student?.uuid) this._uuidMap.delete(student.uuid);
+      this.state.students.delete(removedId);
+    }
+    this.ui.updateDashboard(this.getStudentsArray());
+  }
+
+  onHostDetected(h) {
+    if (this.state.isInMeeting && this.state.role !== 'tutor') {
+      this.upgradeToTutor();
+    }
+  }
+
+  onHostUpgrade() {
+    if (this.state.isInMeeting && this.state.role !== 'tutor') {
+      this.upgradeToTutor();
+    }
+  }
+
+  upgradeToTutor() {
+    console.log('[ConfuSense] Host detected — upgrading to tutor role');
+    this.state.role = 'tutor';
+
+    if (this.videoProc) { this.videoProc.stop(); this.videoProc = null; }
+    this.ui.showStudentWidget?.(false);
+
+    // Re-register as host
