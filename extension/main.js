@@ -608,3 +608,63 @@ class ConfuSenseApp {
   }
 
   onDetectionStatus(payload) {
+    if (this.state.role !== 'tutor') return;
+    const studentName = payload.studentName;
+    const enabled = payload.enabled;
+    if (!studentName) return;
+
+    const nameKey = studentName.toLowerCase().trim();
+    console.log(`[ConfuSense] Detection status: ${studentName} → ${enabled ? 'ON' : 'OFF'}`);
+
+    // Update blocklist
+    if (enabled) {
+      this.disabledStudentNames.delete(nameKey);
+    } else {
+      this.disabledStudentNames.add(nameKey);
+    }
+
+    // Find student by name and update
+    const studentId = this.findStudentByName(studentName);
+    if (studentId) {
+      const student = this.state.students.get(studentId);
+      if (student) {
+        student.detectionEnabled = enabled;
+        console.log(`[ConfuSense] Updated detection: ${studentName} → ${enabled}`);
+      }
+    } else {
+      // Student not yet in Map — store pending for when they're added
+      this.pendingDetectionStatuses.set(nameKey, enabled);
+      console.log(`[ConfuSense] Stored pending detection status: ${studentName} → ${enabled}`);
+    }
+
+    // Also try matching by UUID
+    if (payload.studentUuid) {
+      for (const [, student] of this.state.students) {
+        if (student.uuid === payload.studentUuid) {
+          student.detectionEnabled = enabled;
+          break;
+        }
+      }
+    }
+
+    this.ui.updateDashboard(this.getStudentsArray());
+  }
+
+  onInterventionReceived(payload) {
+    if (this.state.role !== 'student') return;
+
+    if (this.state.currentConfusionStart) {
+      const evt = this.state.confusionEvents[this.state.confusionEvents.length - 1];
+      if (evt) {
+        evt.durationMs = Date.now() - this.state.currentConfusionStart;
+        evt.intervened = true;
+      }
+      this.state.currentConfusionStart = null;
+      this.state.totalConfusedMs += evt?.durationMs || 0;
+    }
+
+    // Pause until tutor stops intervention (10-min safety timeout)
+    this._framePauseUntil = Date.now() + 600000;
+    if (this._framePauseTimerId) clearTimeout(this._framePauseTimerId);
+    if (this.videoProc) {
+      this.videoProc.pause();
