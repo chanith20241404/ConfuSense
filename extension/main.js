@@ -318,3 +318,53 @@ class ConfuSenseApp {
     this.ui.showStudentWidget?.(false);
 
     // Re-register as host
+    this.registerSession();
+    this.activateTutorMode();
+  }
+
+  async registerSession() {
+    await this.post('/api/sessions/join', {
+      uuid:        this.uuid,
+      role:        this.state.role === 'tutor' ? 'host' : 'student',
+      meetingId:   this.state.meetingId,
+      name:        this.state.selfName || undefined,
+      detectionOn: this.settings.enabled,
+    });
+    console.log('[ConfuSense] Session registered');
+  }
+
+  async syncDetectionStatus(enabled) {
+    if (!this.uuid || !this.state.meetingId) {
+      console.warn('[ConfuSense] Cannot sync detection: missing uuid or meetingId');
+      return;
+    }
+    const result = await this.post('/api/sessions/detection', {
+      uuid:        this.uuid,
+      meetingId:   this.state.meetingId,
+      detectionOn: enabled,
+    });
+    if (result) {
+      console.log('[ConfuSense] Detection status synced:', enabled ? 'ON' : 'OFF');
+    } else {
+      console.warn('[ConfuSense] Failed to sync detection status');
+    }
+  }
+
+  startNotificationPolling() {
+    if (this._pollIntervalId) return;
+    this._pollIntervalId = setInterval(() => this.pollNotifications(), 2000);
+  }
+
+  startDashboardPolling() {
+    if (this._dashboardPollId) return;
+    this._dashboardPollId = setInterval(() => this.pollDashboard(), 3000);
+    this.pollDashboard();
+  }
+
+  stopPolling() {
+    if (this._pollIntervalId) { clearInterval(this._pollIntervalId); this._pollIntervalId = null; }
+    if (this._dashboardPollId) { clearInterval(this._dashboardPollId); this._dashboardPollId = null; }
+  }
+
+  async pollNotifications() {
+    if (!this.uuid || !this.state.isInMeeting) return;
