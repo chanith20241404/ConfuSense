@@ -98,3 +98,60 @@
     }
 
     resume() {
+      this.isPaused = false;
+      this.frameBuffer = [];
+      console.log('[VideoProcessor] Resumed');
+    }
+
+    _captureFrame() {
+      if (this.isPaused) return;
+      if (!this.video || this.video.readyState < 2) return;
+      if (!this.stream || this.stream.getTracks().every(t => t.readyState === 'ended')) {
+        console.warn('[VideoProcessor] All tracks ended — stopping');
+        this.stop();
+        if (this.onCameraLost) this.onCameraLost();
+        return;
+      }
+
+      this.ctx.drawImage(this.video, 0, 0, 320, 240);
+      const dataUrl = this.canvas.toDataURL('image/jpeg', 0.4);
+      const base64 = dataUrl.split(',')[1];
+
+      this.frameBuffer.push(base64);
+
+      if (this.frameBuffer.length >= this.BATCH_SIZE) {
+        this._sendBatch();
+      }
+    }
+
+    async _sendBatch() {
+      const frames = this.frameBuffer.slice();
+      this.frameBuffer = [];
+
+      try {
+        const res = await chrome.runtime.sendMessage({
+          type: 'API_FETCH',
+          url: `${this.serverUrl}/api/frames/batch`,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uuid: this.uuid,
+            meetingId: this.meetingId,
+            frames,
+          }),
+        });
+
+        if (res?.ok) {
+          console.log(`[VideoProcessor] Batch of ${frames.length} frames sent`);
+        } else {
+          console.warn('[VideoProcessor] Batch upload failed:', res?.status);
+        }
+      } catch (e) {
+        console.warn('[VideoProcessor] Batch send error:', e.message);
+      }
+    }
+  }
+
+  window.ConfuSenseVideoProcessor = ConfuSenseVideoProcessor;
+  console.log('[ConfuSense] Video Processor v4.0 loaded (batch mode — 10 frames)');
+})();
