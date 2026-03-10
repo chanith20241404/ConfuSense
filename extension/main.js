@@ -368,3 +368,63 @@ class ConfuSenseApp {
 
   async pollNotifications() {
     if (!this.uuid || !this.state.isInMeeting) return;
+
+    const role = this.state.role === 'tutor' ? 'host' : 'student';
+    const data = await this.get(`/api/notifications/${this.uuid}?role=${role}`);
+    if (!data?.notifications?.length) return;
+
+    for (const notif of data.notifications) {
+      if (notif.type === 'low_engagement' && this.state.role === 'student') {
+        if (!this.settings.enabled) continue;
+        if (!this.state.popupShowing && Date.now() > this.state.popupCooldownUntil) {
+          this.triggerConfusionPopup();
+        }
+      } else if (notif.type === 'confusion_confirmed' && this.state.role === 'tutor') {
+        this.onConfusionNotification(notif.payload);
+      } else if (notif.type === 'intervention' && this.state.role === 'student') {
+        this.onInterventionReceived(notif.payload);
+      } else if (notif.type === 'intervention_stopped' && this.state.role === 'student') {
+        this.onInterventionStopped(notif.payload);
+      } else if (notif.type === 'student_disengaged' && this.state.role === 'tutor') {
+        this.onDisengagementNotification(notif.payload);
+      } else if (notif.type === 'detection_status' && this.state.role === 'tutor') {
+        this.onDetectionStatus(notif.payload);
+      }
+    }
+  }
+
+  async pollDashboard() {
+    if (this.state.role !== 'tutor' || !this.state.meetingId) return;
+
+    const data = await this.get(`/api/dashboard/${this.state.meetingId}`);
+    if (!data?.students) return;
+
+    const matchedLocalIds = new Set();
+
+    for (const serverStudent of data.students) {
+      let localId = null;
+
+      // 1. Check persistent UUID map
+      if (this._uuidMap.has(serverStudent.uuid)) {
+        const mapped = this._uuidMap.get(serverStudent.uuid);
+        if (this.state.students.has(mapped)) {
+          localId = mapped;
+        }
+      }
+
+      // 2. Match by UUID
+      if (!localId) {
+        for (const [id, s] of this.state.students) {
+          if (s.uuid === serverStudent.uuid) { localId = id; break; }
+        }
+      }
+
+      // 3. Match by name
+      if (!localId && serverStudent.name) {
+        const needle = serverStudent.name.toLowerCase().trim();
+        for (const [id, s] of this.state.students) {
+          if (matchedLocalIds.has(id)) continue;
+          const sName = s.name?.toLowerCase().trim();
+          if (sName && sName === needle) { localId = id; break; }
+        }
+        // Fuzzy fallback
