@@ -488,3 +488,63 @@ class ConfuSenseApp {
     this.ui.showStudentWidget(true);
 
     if (this.videoProc) return true;
+
+    try {
+      this.videoProc = new window.ConfuSenseVideoProcessor();
+      this.videoProc.onCameraLost = () => this.handleCameraLost();
+      await this.videoProc.start(this.uuid, this.state.meetingId, this.settings.serverUrl);
+      console.log('[ConfuSense] Video processing started — frames sent to Gemini via backend');
+
+      const now = Date.now();
+      if (now < this._framePauseUntil) {
+        this.videoProc.pause();
+        console.log('[ConfuSense] Re-applied intervention pause on new videoProc');
+      }
+      return true;
+    } catch (e) {
+      console.error('[ConfuSense] Camera access denied or unavailable:', e.message);
+      this.videoProc = null;
+      this.settings.enabled = false;
+      chrome.storage.local.set({ confusenseSettings: this.settings });
+      this.ui.showStudentWidget(false);
+      return false;
+    }
+  }
+
+  handleCameraLost() {
+    console.warn('[ConfuSense] Camera stream lost unexpectedly');
+    if (this.videoProc) { this.videoProc.stop(); this.videoProc = null; }
+    this.settings.enabled = false;
+    chrome.storage.local.set({ confusenseSettings: this.settings });
+    this.ui.showStudentWidget(false);
+    if (this.state.isInMeeting && this.state.meetingId) {
+      this.syncDetectionStatus(false);
+    }
+  }
+
+  triggerConfusionPopup() {
+    if (this.state.popupShowing) return;
+    this.state.popupShowing   = true;
+    this.state.confusionStartTime = null;
+
+    console.log('[ConfuSense] Showing confusion popup (triggered by Gemini low engagement)');
+
+    this.ui.showConfusionPopup((confirmed) => {
+      this.state.popupShowing = false;
+      this.state.popupCooldownUntil = Date.now() + 120000; // 2 min cooldown
+
+      if (confirmed === true) {
+        this.onStudentConfirmedConfusion();
+      } else {
+        console.log('[ConfuSense] Student denied/ignored confusion popup');
+      }
+    });
+  }
+
+  async onStudentConfirmedConfusion() {
+    console.log('[ConfuSense] Student confirmed confusion — notifying server');
+
+    const timestamp = Date.now();
+
+    this.state.currentConfusionStart = timestamp;
+    this.state.confusionEvents.push({
