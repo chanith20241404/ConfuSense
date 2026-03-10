@@ -428,3 +428,63 @@ class ConfuSenseApp {
           if (sName && sName === needle) { localId = id; break; }
         }
         // Fuzzy fallback
+        if (!localId) {
+          for (const [id, s] of this.state.students) {
+            if (matchedLocalIds.has(id)) continue;
+            const sName = s.name?.toLowerCase().trim();
+            if (sName && (sName.includes(needle) || needle.includes(sName))) {
+              localId = id; break;
+            }
+          }
+        }
+      }
+
+      // 4. Link to the only unlinked student if there's exactly one
+      if (!localId) {
+        const unlinked = [];
+        for (const [id, s] of this.state.students) {
+          if (!s.uuid && !matchedLocalIds.has(id)) unlinked.push(id);
+        }
+        if (unlinked.length === 1) {
+          localId = unlinked[0];
+        }
+      }
+
+      if (localId) {
+        matchedLocalIds.add(localId);
+        this._uuidMap.set(serverStudent.uuid, localId);
+
+        const local = this.state.students.get(localId);
+        if (local) {
+          local.uuid = serverStudent.uuid;
+          if (!local.name && serverStudent.name) local.name = serverStudent.name;
+          local.sessionConfusionPct = serverStudent.confusionPct ?? local.sessionConfusionPct;
+          local.confirmedEvents = serverStudent.confusionEvents?.length ?? local.confirmedEvents;
+          if (serverStudent.detectionEnabled !== undefined) {
+            local.detectionEnabled = serverStudent.detectionEnabled;
+          }
+        }
+      }
+    }
+
+    this.ui.updateDashboard(this.getStudentsArray());
+  }
+
+  activateTutorMode() {
+    console.log('[ConfuSense] Activating TUTOR mode');
+    this.ui.showDashboard(this.getStudentsArray(), this.state.sessionStartTime);
+    this.startNotificationPolling();
+    this.startDashboardPolling();
+  }
+
+  async activateStudentMode() {
+    console.log('[ConfuSense] Activating STUDENT mode');
+
+    if (!this.settings.enabled) {
+      this.ui.showStudentWidget(false);
+      return false;
+    }
+
+    this.ui.showStudentWidget(true);
+
+    if (this.videoProc) return true;
