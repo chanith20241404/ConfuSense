@@ -168,3 +168,83 @@ class ConfuSenseApp {
     console.log('[ConfuSense] Meeting started:', data.meetingId);
     this.state.isInMeeting    = true;
     this.state.meetingId      = data.meetingId;
+    this.state.selfName       = data.selfName;
+    this.state.sessionStartTime = Date.now();
+
+    this.state.role = data.isHost ? 'tutor' : 'student';
+    console.log('[ConfuSense] Role:', this.state.role);
+
+    // Reset popup state so stale cooldowns from previous meetings don't block
+    this.state.popupShowing       = false;
+    this.state.popupCooldownUntil = 0;
+    this.state.confusionStartTime = null;
+
+    this.registerSession();
+
+    // Retry name resolution — DOM parser's selfName is often null at start
+    this._nameRetryId = setInterval(() => {
+      const name = this.domParser?.getSelfName?.();
+      if (name && name !== this.state.selfName) {
+        this.state.selfName = name;
+        console.log('[ConfuSense] Name resolved, re-registering:', name);
+        this.registerSession();
+      }
+      if (this.state.selfName) {
+        clearInterval(this._nameRetryId);
+        this._nameRetryId = null;
+      }
+    }, 1500);
+
+    if (this.state.role === 'student') {
+      this.ui.showStudentWidget(this.settings.enabled);
+      this.activateStudentMode();
+      this.startNotificationPolling();
+    } else {
+      this.activateTutorMode();
+    }
+  }
+
+  onMeetingEnd(data) {
+    console.log('[ConfuSense] Meeting ended');
+
+    if (this.state.role === 'tutor' && this.state.students.size > 0) {
+      console.log('[ConfuSense] Auto-downloading analytics on meeting end...');
+      const sessionDurationMs = this.state.sessionStartTime
+        ? Date.now() - this.state.sessionStartTime
+        : 1;
+      const students = this.getStudentsArray().map(s => ({
+        name: s.name,
+        overallConfusionPct: s.sessionConfusionPct || 0,
+        events: (s.confusionEvents || []).map(e => ({
+          timestamp:        e.timestamp,
+          durationMs:       e.durationMs || 30000,
+          confirmationRate: e.confirmationRate || 0.75,
+          intervened:       e.intervened || false,
+          intervenedAt:     e.intervenedAt || null,
+          stoppedAt:        e.stoppedAt || null,
+        }))
+      }));
+      this.downloadCSV(students, sessionDurationMs);
+    }
+
+    if (this.videoProc) { this.videoProc.stop(); this.videoProc = null; }
+    if (this._nameRetryId) { clearInterval(this._nameRetryId); this._nameRetryId = null; }
+
+    this.stopPolling();
+    this.ui.destroy();
+    this.ui.init();
+
+    this.state.isInMeeting        = false;
+    this.state.students.clear();
+    this._uuidMap.clear();
+    this.disabledStudentNames.clear();
+    this.pendingDetectionStatuses.clear();
+    this.state.confusionStartTime = null;
+    this.state.popupShowing       = false;
+    this._interventionCooldownUntil = 0;
+    this._framePauseUntil = 0;
+    if (this._framePauseTimerId) { clearTimeout(this._framePauseTimerId); this._framePauseTimerId = null; }
+    this.scoreBuffer = [];
+  }
+
+  onParticipantJoin(p) {
