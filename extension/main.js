@@ -48,3 +48,53 @@ class ConfuSenseApp {
   async post(path, body) {
     try {
       const res = await chrome.runtime.sendMessage({
+        type: 'API_FETCH',
+        url: `${this.settings.serverUrl}${path}`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res?.ok) console.warn('[ConfuSense] POST', path, 'status', res?.status, res?.json || res?.text);
+      return res?.ok ? (res?.json ?? null) : null;
+    } catch (err) {
+      console.warn('[ConfuSense] POST failed:', path, err.message);
+      return null;
+    }
+  }
+
+  async get(path) {
+    try {
+      const res = await chrome.runtime.sendMessage({
+        type: 'API_FETCH',
+        url: `${this.settings.serverUrl}${path}`,
+        method: 'GET',
+      });
+      if (!res?.ok) return null;
+      return res?.json ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async init() {
+    console.log('[ConfuSense] Initialising v9.0.0');
+
+    const stored = await chrome.storage.local.get(['uuid']);
+    this.uuid = stored.uuid;
+    if (!this.uuid) {
+      console.error('[ConfuSense] No UUID found — extension may need reinstall');
+      return;
+    }
+
+    await this.loadSettings();
+
+    this.ui = new window.ConfuSenseUI();
+    this.ui.setCallbacks({
+      onIntervene:         (s) => this.handleIntervene(s),
+      onStopIntervention:  (s) => this.handleStopIntervention(s),
+      onDismiss:           (s) => this.handleDismiss(s),
+      onExportAnalytics:   ()  => this.showAnalyticsOverlay(),
+      onToggleDetection:   async (enabled) => {
+        this.settings.enabled = enabled;
+        chrome.storage.local.set({ confusenseSettings: this.settings });
+
