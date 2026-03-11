@@ -698,3 +698,93 @@ class UIInjector {
         Session Report
       </div>
     `;
+
+    const sessionStart = this.sessionStartTime || Date.now();
+    students.forEach(student => {
+      const rate = student.overallRate;
+      const totalM = Math.floor(student.totalConfusionSec / 60);
+      const totalS = Math.round(student.totalConfusionSec % 60);
+      const totalStr = `${totalM.toString().padStart(2, '0')}:${totalS.toString().padStart(2, '0')}`;
+      const interventionCount = student.interventions.length;
+
+      let eventsHTML = '';
+      if (student.events && student.events.length > 0) {
+        const rows = student.events.map(evt => {
+          const elapsed = Math.max(0, Math.floor((evt.timestamp - sessionStart) / 1000));
+          const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+          const ss = String(elapsed % 60).padStart(2, '0');
+          const dur = Math.round((evt.durationMs || 0) / 1000);
+          return `<tr><td style="color:#c0c0d0;padding:2px 8px;">${mm}:${ss}</td><td style="padding:2px 8px;">${dur}s</td><td style="color:${evt.intervened ? '#3b82f6' : '#6b7280'};padding:2px 8px;">${evt.intervened ? 'Yes' : 'No'}</td></tr>`;
+        }).join('');
+        eventsHTML = `<div style="margin-top:10px;"><div style="font-size:9px;color:#9898b8;font-weight:bold;margin-bottom:4px;">Event Log</div><table style="font-size:9px;color:#a0a0c0;"><tr><th style="text-align:left;padding:2px 8px;color:#7878a0;">Time</th><th style="padding:2px 8px;color:#7878a0;">Duration</th><th style="padding:2px 8px;color:#7878a0;">Intervened</th></tr>${rows}</table></div>`;
+      }
+
+      html += `
+        <div style="background:rgba(75,70,180,0.25);border:1.5px solid rgba(100,100,230,0.45);border-radius:14px;padding:18px;margin-bottom:24px;">
+          <div style="font-size:15px;font-weight:bold;color:#fff;">Student : ${student.name}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
+            <div>
+              <div style="font-size:11px;color:#a0a0c0;">Times Confused</div>
+              <div style="font-size:38px;font-weight:bold;color:#fff;">${student.timesConfused}</div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:#a0a0c0;">Avg Confusion</div>
+              <div style="font-size:38px;font-weight:bold;color:${rate >= 70 ? '#f87171' : rate >= 50 ? '#fbbf24' : '#4ade80'};">${rate}%</div>
+            </div>
+          </div>
+          <div style="color:#8888a8;font-size:10px;margin-top:12px;">
+            Total Confusion Time: ${totalStr} (min:sec) · Interventions: ${interventionCount}
+          </div>
+          ${eventsHTML}
+        </div>
+      `;
+    });
+
+    const totalDetections = students.reduce((s, st) => s + st.timesConfused, 0);
+    const classAvgRate = students.length > 0
+      ? Math.round(students.reduce((s, st) => s + st.overallRate, 0) / students.length)
+      : 0;
+
+    html += `
+      <div style="background:rgba(90,80,200,0.3);border:1.5px solid rgba(130,120,255,0.5);border-radius:14px;padding:18px;margin-top:8px;">
+        <div style="font-size:13px;font-weight:bold;color:#fff;">Class Summary</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+          <div>
+            <div style="font-size:10px;color:#a0a0c0;">Total Detections</div>
+            <div style="font-size:28px;font-weight:bold;color:#fff;">${totalDetections}</div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:#a0a0c0;">Class Avg Confusion</div>
+            <div style="font-size:28px;font-weight:bold;color:${classAvgRate >= 70 ? '#f87171' : classAvgRate >= 50 ? '#fbbf24' : '#4ade80'};">${classAvgRate}%</div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:#a0a0c0;">Students</div>
+            <div style="font-size:28px;font-weight:bold;color:#fff;">${students.length}</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    reportDiv.innerHTML = html;
+    document.body.appendChild(reportDiv);
+    reportDiv.remove();
+
+    await this._buildPDFCanvasFallback(students);
+  }
+
+  async _buildPDFCanvasFallback(students) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    const SCALE = 3;
+    const W = 520;
+    const PAD = 28;
+    const CARD_PAD = 22;
+    const CARD_GAP = 28;
+    const CARD_W = W - PAD * 2;
+    const TITLE_AREA = 110;
+    const CARD_BASE_H = 150;
+    const EVENT_ROW_H = 16;
+    const EVENT_HEADER_H = 22;
+    const MAX_EVENTS_SHOWN = 5;
+    const SUMMARY_H = 120;
