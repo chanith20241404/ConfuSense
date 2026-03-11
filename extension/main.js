@@ -668,3 +668,83 @@ class ConfuSenseApp {
     if (this._framePauseTimerId) clearTimeout(this._framePauseTimerId);
     if (this.videoProc) {
       this.videoProc.pause();
+    }
+    this._framePauseTimerId = setTimeout(() => {
+      this._framePauseUntil = 0;
+      this._framePauseTimerId = null;
+      if (this.videoProc) this.videoProc.resume();
+      console.log('[ConfuSense] Intervention safety timeout — resuming detection');
+    }, 600000);
+
+    console.log('[ConfuSense] Tutor intervened:', payload.hostName);
+  }
+
+  onInterventionStopped(payload) {
+    if (this.state.role !== 'student') return;
+
+    this._framePauseUntil = 0;
+    if (this._framePauseTimerId) {
+      clearTimeout(this._framePauseTimerId);
+      this._framePauseTimerId = null;
+    }
+    if (this.videoProc) this.videoProc.resume();
+
+    this.state.popupCooldownUntil = 0;
+
+    console.log('[ConfuSense] Tutor stopped intervention — detection resumed');
+  }
+
+  async handleIntervene(student) {
+    console.log('[ConfuSense] Intervening for:', student.name);
+
+    const s = this.state.students.get(student.id);
+    if (s) {
+      s.isConfused          = false;
+      s.showAlert           = false;
+      s.interventionActive  = true;
+      const last = s.confusionEvents?.[s.confusionEvents.length - 1];
+      if (last) {
+        last.intervened = true;
+        last.intervenedAt = Date.now();
+      }
+    }
+
+    if (student.uuid) {
+      await this.post(`/api/intervene/${this.uuid}`, {
+        studentUuid: student.uuid,
+        meetingId:   this.state.meetingId,
+        hostName:    this.state.selfName,
+        studentName: student.name,
+      });
+    }
+
+    this.ui.updateDashboard(this.getStudentsArray());
+  }
+
+  async handleStopIntervention(student) {
+    console.log('[ConfuSense] Stopping intervention for:', student.name);
+
+    const s = this.state.students.get(student.id);
+    if (s) {
+      s.interventionActive = false;
+      const last = s.confusionEvents?.[s.confusionEvents.length - 1];
+      if (last && last.intervened) {
+        last.stoppedAt = Date.now();
+      }
+    }
+
+    if (student.uuid) {
+      await this.post(`/api/intervene/${this.uuid}/stop`, {
+        studentUuid: student.uuid,
+        meetingId:   this.state.meetingId,
+        hostName:    this.state.selfName,
+        studentName: student.name,
+      });
+    }
+
+    this.ui.updateDashboard(this.getStudentsArray());
+  }
+
+  handleDismiss(student) {
+    const s = this.state.students.get(student.id);
+    if (s) {
