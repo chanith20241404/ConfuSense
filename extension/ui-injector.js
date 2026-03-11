@@ -248,3 +248,93 @@ class UIInjector {
       const lastLog = this.lastLogTime.get(s.id) || 0;
 
       if (now - lastLog >= 10000) {
+        this.lastLogTime.set(s.id, now);
+
+        this.sessionLog.push({
+          timestamp: now,
+          studentId: s.id,
+          studentName: s.name,
+          confused: !!s.isConfused,
+          confirmed: this.confirmedConfusions.has(s.id),
+          intervention: 'None'
+        });
+
+        if (s.isConfused && !this.confusionStartTimes.has(s.id)) {
+          this.confusionStartTimes.set(s.id, now);
+        } else if (!s.isConfused && this.confusionStartTimes.has(s.id)) {
+          const startTime = this.confusionStartTimes.get(s.id);
+          const duration = Math.round((now - startTime) / 1000);
+          this.confusionStartTimes.delete(s.id);
+
+          if (!this.confusionEvents.has(s.id)) this.confusionEvents.set(s.id, []);
+          this.confusionEvents.get(s.id).push({
+            timestamp: startTime,
+            endTimestamp: now,
+            duration,
+            intervention: this.confirmedConfusions.has(s.id) ? 'Confirmed' : 'None',
+            interventionBy: null
+          });
+        }
+      }
+    });
+
+    this.updateBubble();
+  }
+
+  getParticipantHTML(student) {
+    const detectionOff = student.detectionEnabled === false;
+    const isConfused   = !detectionOff && student.isConfused;
+    const isIntervening = this.activeInterventions.has(student.id);
+
+    const dotHTML = detectionOff
+      ? `<span class="cs-detection-dot cs-dot-off" title="Detection Off"></span>`
+      : `<span class="cs-detection-dot cs-dot-on" title="Detection On"></span>`;
+
+    let statusHTML = '';
+    let actionHTML = '';
+
+    if (detectionOff) {
+      statusHTML = `<span style="font-size:11px;color:#ef4444;font-weight:600;flex-shrink:0;">Detection Off</span>`;
+    } else if (isIntervening) {
+      statusHTML = `<span style="font-size:11px;color:#3b82f6;font-weight:600;flex-shrink:0;">Intervening</span>`;
+      actionHTML = `<button class="cs-card-stop-btn" id="cs-card-stop-${student.id}" style="margin-left:6px;background:#ef4444;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;cursor:pointer;">Stop</button>`;
+    } else if (isConfused) {
+      statusHTML = `<span style="font-size:11px;color:#ef4444;font-weight:600;flex-shrink:0;">Confused</span>`;
+      actionHTML = `<button class="cs-card-intervene-btn" id="cs-card-intervene-${student.id}" style="margin-left:6px;">Intervene</button>`;
+    } else {
+      statusHTML = `<span style="font-size:11px;color:#4ade80;flex-shrink:0;">Not Confused</span>`;
+    }
+
+    return `
+      <div class="cs-participant${isConfused ? ' high-confusion' : ''}${detectionOff ? ' detection-off' : ''}" data-id="${student.id}" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;${detectionOff ? 'background:rgba(239,68,68,0.08);border-left:3px solid #ef4444;' : ''}">
+        <span style="display:flex;align-items:center;flex:1;overflow:hidden;">
+          ${dotHTML}
+          <span class="cs-participant-name" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${detectionOff ? 'color:#9ca3af;' : ''}">${student.name}</span>
+        </span>
+        <span style="margin-left:8px;display:flex;align-items:center;flex-shrink:0;">${statusHTML}${actionHTML}</span>
+      </div>
+    `;
+  }
+
+  flashParticipant(studentId, color) {
+    if (!this.elements.dashboard) return;
+    const el = this.elements.dashboard.querySelector(`[data-id="${CSS.escape(studentId)}"]`);
+    if (!el) return;
+    el.style.transition = 'box-shadow 0.3s ease';
+    el.style.boxShadow  = `inset 0 0 0 2px ${color}`;
+    setTimeout(() => { el.style.boxShadow = 'none'; }, 1500);
+  }
+
+  hideDashboard() {
+    if (this.elements.dashboard) {
+      this.elements.dashboard.classList.add('cs-hidden');
+      this.state.dashboardVisible = false;
+    }
+    if (this.elements.dashboardBubble) {
+      this.elements.dashboardBubble.classList.add('cs-hidden');
+    }
+    this.state.dashboardMinimized = false;
+  }
+
+  minimizeDashboard() {
+    if (this.elements.dashboard) {
