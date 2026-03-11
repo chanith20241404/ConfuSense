@@ -78,3 +78,32 @@ export interface Notification {
 export interface FrameMessage {
   uuid: string;
   meetingId: string;
+  frame: string; // base64 JPEG
+  timestamp: number;
+}
+
+export interface BatchFrameMessage {
+  uuid: string;
+  meetingId: string;
+  frames: string[]; // array of base64 JPEGs
+  timestamp: number;
+}
+
+export interface MeetingSummary {
+  meetingId: string;
+  studentCount: number;
+  avgScore: number | null;
+  lastUpdated: number;
+}
+
+export interface StudentEngagement {
+  uuid: string;
+  name: string | null;
+  latestScore: number | null;
+  scores: Array<{ score: number; scoredAt: number }>;
+  confusionEvents: Array<{ timestamp: number; durationMs: number; intervened: boolean; intervenedAt: number | null; stoppedAt: number | null }>;
+  interventionCount: number;
+  confusionPct: number;
+  detectionEnabled: boolean;
+  interventionActive: boolean;
+}
