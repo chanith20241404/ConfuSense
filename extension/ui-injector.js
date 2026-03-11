@@ -518,3 +518,93 @@ class UIInjector {
       </div>
       <div class="cs-popup-body">
         <span class="cs-popup-emoji">🤔</span>
+        <span class="cs-popup-message">We detected confusion.<br>Are you confused?</span>
+      </div>
+      <div class="cs-popup-actions">
+        <button id="cs-yes-btn" class="cs-popup-btn cs-btn-yes">YES</button>
+        <button id="cs-no-btn" class="cs-popup-btn cs-btn-no">NO</button>
+      </div>
+    `;
+
+    this.elements.container.appendChild(this.elements.popup);
+    this.state.popupVisible = true;
+
+    this.elements.popup.querySelector('#cs-yes-btn')?.addEventListener('click', () => {
+      this.hideStudentPopup();
+      if (onResponse) onResponse(true, false);
+      else if (this.callbacks.onPopupResponse) this.callbacks.onPopupResponse(true, false);
+    });
+
+    this.elements.popup.querySelector('#cs-no-btn')?.addEventListener('click', () => {
+      this.hideStudentPopup();
+      if (onResponse) onResponse(false, false);
+      else if (this.callbacks.onPopupResponse) this.callbacks.onPopupResponse(false, false);
+    });
+
+    this.popupTimeout = setTimeout(() => {
+      this.hideStudentPopup();
+      if (onResponse) onResponse(true, true);
+    }, 20000);
+  }
+
+  hideStudentPopup() {
+    if (this.popupTimeout) clearTimeout(this.popupTimeout);
+    if (this.elements.popup) {
+      this.elements.popup.remove();
+      this.elements.popup = null;
+      this.state.popupVisible = false;
+    }
+  }
+
+  hidePopup() { this.hideStudentPopup(); }
+
+
+  showTutorAlert(student) {
+    if (this.elements.alert) this.elements.alert.remove();
+
+    this.elements.alert = document.createElement('div');
+    this.elements.alert.className = 'cs-alert';
+    this.elements.alert.innerHTML = `
+      <div class="cs-alert-header">
+        <div class="cs-alert-icon">⚠️</div>
+        <div class="cs-alert-title">
+          <h3>Sustained Confusion Alert</h3>
+          <p>Intervention recommended</p>
+        </div>
+        <button id="cs-alert-close" class="cs-alert-close">×</button>
+      </div>
+      <div class="cs-alert-body">
+        <p><strong>${student.name}</strong> has exhibited a confusion rate above 70% for 20 seconds. Recommended intervention is advised.</p>
+      </div>
+      <div class="cs-alert-actions">
+        <button id="cs-intervene-btn" class="cs-alert-btn cs-btn-intervene">Intervene Now</button>
+        <button id="cs-dismiss-btn" class="cs-alert-btn cs-btn-dismiss">Dismiss for 5 mins</button>
+      </div>
+    `;
+
+    this.elements.container.appendChild(this.elements.alert);
+    this.state.alertVisible = true;
+
+    this.elements.alert.querySelector('#cs-intervene-btn')?.addEventListener('click', () => {
+      if (this.callbacks.onIntervene) this.callbacks.onIntervene(student);
+      this.hideTutorAlert();
+    });
+
+    this.elements.alert.querySelector('#cs-dismiss-btn')?.addEventListener('click', () => {
+      if (this.callbacks.onDismissAlert) this.callbacks.onDismissAlert(student, 300000);
+      this.hideTutorAlert();
+    });
+
+    this.elements.alert.querySelector('#cs-alert-close')?.addEventListener('click', () => this.hideTutorAlert());
+  }
+
+  hideTutorAlert() {
+    if (this.elements.alert) {
+      this.elements.alert.remove();
+      this.elements.alert = null;
+      this.state.alertVisible = false;
+    }
+  }
+
+  showAlert(student) { this.showTutorAlert(student); }
+  hideAlert() { this.hideTutorAlert(); }
