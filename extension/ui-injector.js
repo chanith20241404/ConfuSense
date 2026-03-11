@@ -338,3 +338,93 @@ class UIInjector {
 
   minimizeDashboard() {
     if (this.elements.dashboard) {
+      this.elements.dashboard.classList.add('cs-hidden');
+    }
+
+    if (!this.elements.dashboardBubble) {
+      this.elements.dashboardBubble = document.createElement('div');
+      this.elements.dashboardBubble.className = 'cs-dashboard-bubble';
+      this.elements.dashboardBubble.innerHTML = `
+        <span class="cs-bubble-logo">CS</span>
+        <span class="cs-bubble-rate">0</span>
+      `;
+      this.elements.container.appendChild(this.elements.dashboardBubble);
+      this.elements.dashboardBubble.addEventListener('click', () => this.expandDashboard());
+      this.setupDrag(this.elements.dashboardBubble);
+    }
+
+    this.elements.dashboardBubble.classList.remove('cs-hidden');
+    this.updateBubble();
+    this.state.dashboardVisible = false;
+    this.state.dashboardMinimized = true;
+  }
+
+  expandDashboard() {
+    if (this.elements.dashboardBubble) {
+      this.elements.dashboardBubble.classList.add('cs-hidden');
+    }
+    if (this.elements.dashboard) {
+      this.elements.dashboard.classList.remove('cs-hidden');
+      this.updateDashboard();
+    }
+    this.state.dashboardVisible = true;
+    this.state.dashboardMinimized = false;
+  }
+
+  updateBubble() {
+    if (!this.elements.dashboardBubble) return;
+    const rateEl = this.elements.dashboardBubble.querySelector('.cs-bubble-rate');
+    if (rateEl) {
+      const active   = this.participants.filter(p => p.role === 'student' && p.detectionEnabled !== false);
+      const confused = active.filter(s => s.isConfused).length;
+      rateEl.textContent = `${confused}`;
+      rateEl.style.color = confused > 0 ? '#ef4444' : '#4ade80';
+    }
+  }
+
+  bindDashboardEvents() {
+    const d = this.elements.dashboard;
+    if (!d) return;
+
+    d.querySelector('#cs-minimize')?.addEventListener('click', () => this.minimizeDashboard());
+    d.querySelector('#cs-collapse')?.addEventListener('click', () => {
+      d.querySelector('.cs-body')?.classList.toggle('cs-hidden');
+    });
+    d.querySelector('#cs-close')?.addEventListener('click', () => this.minimizeDashboard());
+
+    d.querySelector('#cs-export')?.addEventListener('click', () => {
+      this.generatePDFReport();
+    });
+
+  }
+
+
+  markStudentConfirmed(studentId) {
+    this.confirmedConfusions.set(studentId, Date.now());
+    this.updateDashboard();
+  }
+
+  clearStudentConfirmed(studentId) {
+    this.confirmedConfusions.delete(studentId);
+    this.updateDashboard();
+  }
+
+  recordIntervention(studentId, studentName, tutorName) {
+    const now = Date.now();
+    if (!this.studentInterventions.has(studentId)) {
+      this.studentInterventions.set(studentId, []);
+    }
+    this.studentInterventions.get(studentId).push({
+      timestamp: now,
+      tutorName: tutorName || 'Tutor',
+      studentName: studentName
+    });
+
+    if (this.confusionEvents.has(studentId)) {
+      const events = this.confusionEvents.get(studentId);
+      if (events.length > 0) {
+        events[events.length - 1].intervention = 'Intervened';
+        events[events.length - 1].interventionBy = tutorName || 'Tutor';
+      }
+    }
+
