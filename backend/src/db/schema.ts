@@ -38,3 +38,43 @@ export const interventions = sqliteTable('interventions', {
 
 export const engagementScores = sqliteTable('engagement_scores', {
   id:        integer('id').primaryKey({ autoIncrement: true }),
+  uuid:      text('uuid').notNull(),
+  meetingId: text('meeting_id').notNull(),
+  score:     real('score').notNull(),
+  scoredAt:  integer('scored_at').notNull(),
+});
+
+export const notifications = sqliteTable('notifications', {
+  id:        integer('id').primaryKey({ autoIncrement: true }),
+  uuid:      text('uuid').notNull(),
+  type:      text('type').notNull(),
+  payload:   text('payload').notNull(),
+  createdAt: integer('created_at').notNull(),
+  readAt:    integer('read_at'),
+});
+
+// ── Migration Runner ──────────────────────────────────────────────────────────
+
+export async function runMigrations(): Promise<void> {
+  // Use raw libsql client for DDL — drizzle-kit push requires interactive CLI.
+  // CREATE TABLE IF NOT EXISTS is idempotent so this is safe to run on every boot.
+  const client = createClient({ url: config.LIBSQL_URL });
+
+  await client.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      uuid         TEXT    NOT NULL,
+      meeting_id   TEXT    NOT NULL,
+      role         TEXT    NOT NULL CHECK(role IN ('student', 'host')),
+      name         TEXT,
+      detection_on INTEGER DEFAULT 1,
+      joined_at    INTEGER NOT NULL,
+      PRIMARY KEY (uuid, meeting_id, role)
+    );
+
+    CREATE TABLE IF NOT EXISTS engagement_scores (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      uuid       TEXT    NOT NULL,
+      meeting_id TEXT    NOT NULL,
+      score      REAL    NOT NULL,
+      scored_at  INTEGER NOT NULL
+    );
