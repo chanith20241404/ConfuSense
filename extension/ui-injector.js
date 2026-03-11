@@ -878,3 +878,93 @@ class UIInjector {
       ctx.fillStyle = '#9898b8';
       ctx.font = '11px Segoe UI, sans-serif';
       ctx.fillText('Times Confused', cx + CARD_PAD, y + 52);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 42px Segoe UI, sans-serif';
+      ctx.fillText(`${student.timesConfused}`, cx + CARD_PAD, y + 100);
+
+      ctx.fillStyle = '#9898b8';
+      ctx.font = '11px Segoe UI, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText('Avg Confusion', cx + CARD_W - CARD_PAD - 60, y + 52);
+      ctx.textAlign = 'left';
+
+      const rateColor = rate >= 70 ? '#f87171' : rate >= 50 ? '#fbbf24' : '#4ade80';
+      ctx.fillStyle = rateColor;
+      ctx.font = 'bold 32px Segoe UI, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${rate}%`, cx + CARD_W - CARD_PAD - 64, y + 90);
+      ctx.textAlign = 'left';
+
+      const donutX = cx + CARD_W - 50;
+      const donutY = y + 76;
+      const donutR = 24;
+      const donutWidth = 6;
+
+      ctx.beginPath();
+      ctx.arc(donutX, donutY, donutR, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(200, 50, 50, 0.15)';
+      ctx.lineWidth = donutWidth;
+      ctx.stroke();
+
+      ctx.beginPath();
+      const startAngle = -Math.PI / 2;
+      const endAngle = startAngle + (rate / 100) * Math.PI * 2;
+      ctx.arc(donutX, donutY, donutR, startAngle, endAngle);
+      ctx.strokeStyle = rateColor;
+      ctx.lineWidth = donutWidth;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+
+      ctx.fillStyle = rateColor;
+      ctx.font = 'bold 11px Segoe UI, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${rate}%`, donutX, donutY + 4);
+      ctx.textAlign = 'left';
+
+      const totalM = Math.floor(student.totalConfusionSec / 60);
+      const totalS = Math.round(student.totalConfusionSec % 60);
+      const totalStr = `${totalM.toString().padStart(2, '0')}:${totalS.toString().padStart(2, '0')}`;
+      ctx.fillStyle = '#7878a0';
+      ctx.font = '10px Segoe UI, sans-serif';
+      ctx.fillText(`Total Confusion Time: ${totalStr} (min:sec)`, cx + CARD_PAD, y + CARD_BASE_H - 16);
+
+      ctx.textAlign = 'right';
+      ctx.fillText(`${student.interventions.length} intervention${student.interventions.length !== 1 ? 's' : ''}`, cx + CARD_W - CARD_PAD, y + CARD_BASE_H - 16);
+      ctx.textAlign = 'left';
+
+      // ── Event timeline rows ──────────────────────────────────
+      const eventsToShow = (student.events || []).slice(-MAX_EVENTS_SHOWN);
+      if (eventsToShow.length > 0) {
+        let ey = y + CARD_BASE_H + 2;
+        const sessionStart = student.sessionStartMs || this.sessionStartTime || Date.now();
+
+        // Section header
+        ctx.fillStyle = '#9898b8';
+        ctx.font = 'bold 9px Segoe UI, sans-serif';
+        ctx.fillText('Event Log', cx + CARD_PAD, ey + 10);
+
+        ctx.fillStyle = '#50506a';
+        ctx.font = '8px Segoe UI, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('Time', cx + CARD_PAD + 60, ey + 10);
+        ctx.fillText('Duration', cx + CARD_PAD + 130, ey + 10);
+        ctx.fillText('Intervened', cx + CARD_W - CARD_PAD, ey + 10);
+        ctx.textAlign = 'left';
+
+        // Divider
+        ctx.strokeStyle = 'rgba(100, 100, 220, 0.15)';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(cx + CARD_PAD, ey + 15);
+        ctx.lineTo(cx + CARD_W - CARD_PAD, ey + 15);
+        ctx.stroke();
+
+        ey += EVENT_HEADER_H;
+
+        eventsToShow.forEach((evt) => {
+          const elapsedSec = Math.max(0, Math.floor((evt.timestamp - sessionStart) / 1000));
+          const mm = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+          const ss = String(elapsedSec % 60).padStart(2, '0');
+
