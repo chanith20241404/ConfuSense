@@ -788,3 +788,93 @@ class UIInjector {
     const EVENT_HEADER_H = 22;
     const MAX_EVENTS_SHOWN = 5;
     const SUMMARY_H = 120;
+
+    // Calculate per-student card heights (dynamic based on events)
+    const cardHeights = students.map(s => {
+      const eventCount = Math.min((s.events || []).length, MAX_EVENTS_SHOWN);
+      return eventCount > 0 ? CARD_BASE_H + EVENT_HEADER_H + eventCount * EVENT_ROW_H + 8 : CARD_BASE_H;
+    });
+
+    // Calculate height dynamically
+    let totalH = TITLE_AREA + cardHeights.reduce((s, h) => s + h + CARD_GAP, 0) + SUMMARY_H + PAD * 2 + 30;
+
+    canvas.width = W * SCALE;
+    canvas.height = Math.max(totalH, 500) * SCALE;
+    ctx.scale(SCALE, SCALE);
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, totalH);
+    bgGrad.addColorStop(0, '#0c0c20');
+    bgGrad.addColorStop(0.5, '#080818');
+    bgGrad.addColorStop(1, '#060612');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, totalH);
+
+    const topGlow = ctx.createRadialGradient(W / 2, 0, 20, W / 2, 0, W * 0.7);
+    topGlow.addColorStop(0, 'rgba(90, 80, 240, 0.15)');
+    topGlow.addColorStop(0.5, 'rgba(60, 60, 180, 0.06)');
+    topGlow.addColorStop(1, 'transparent');
+    ctx.fillStyle = topGlow;
+    ctx.fillRect(0, 0, W, 250);
+
+    ctx.fillStyle = '#8b5cf6';
+    ctx.font = 'bold 11px Segoe UI, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('ConfuSense', W / 2, 24);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 22px Segoe UI, sans-serif';
+    ctx.fillText('Session Report', W / 2, 52);
+
+    const sessionDate = new Date().toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+    const sessionDur = this.formatTime(this.sessionTime);
+    ctx.fillStyle = '#7878a0';
+    ctx.font = '10px Segoe UI, sans-serif';
+    ctx.fillText(`${sessionDate}  ·  Duration: ${sessionDur}  ·  ${students.length} Student${students.length !== 1 ? 's' : ''}`, W / 2, 72);
+
+    ctx.strokeStyle = 'rgba(100, 100, 220, 0.2)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(PAD + 30, 85);
+    ctx.lineTo(W - PAD - 30, 85);
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    let y = TITLE_AREA;
+
+    students.forEach((student, si) => {
+      const rate = student.overallRate;
+      const cx = PAD;
+      const CARD_H = cardHeights[si];
+
+      ctx.shadowColor = 'rgba(80, 70, 200, 0.15)';
+      ctx.shadowBlur = 12;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 4;
+
+      const cardGrad = ctx.createLinearGradient(cx, y, cx, y + CARD_H);
+      cardGrad.addColorStop(0, 'rgba(80, 75, 190, 0.3)');
+      cardGrad.addColorStop(1, 'rgba(50, 45, 140, 0.18)');
+      ctx.fillStyle = cardGrad;
+      ctx.strokeStyle = 'rgba(110, 110, 240, 0.4)';
+      ctx.lineWidth = 1;
+      this._roundRect(ctx, cx, y, CARD_W, CARD_H, 16);
+
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+
+      const innerGlow = ctx.createLinearGradient(cx, y, cx, y + 60);
+      innerGlow.addColorStop(0, 'rgba(120, 110, 255, 0.08)');
+      innerGlow.addColorStop(1, 'transparent');
+      ctx.fillStyle = innerGlow;
+      ctx.fillRect(cx + 1, y + 1, CARD_W - 2, 58);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 16px Segoe UI, sans-serif';
+      ctx.fillText(`Student : ${student.name}`, cx + CARD_PAD, y + 30);
+
+      ctx.fillStyle = '#9898b8';
+      ctx.font = '11px Segoe UI, sans-serif';
+      ctx.fillText('Times Confused', cx + CARD_PAD, y + 52);
