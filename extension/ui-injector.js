@@ -158,3 +158,93 @@ class UIInjector {
     const typeColors = {
       DETECTION:   '#6b7280',
       POPUP_SHOWN: '#f59e0b',
+      POPUP_RESP:  entry.response === 'YES' ? '#ef4444' : '#4ade80',
+      INTERVENE:   '#3b82f6',
+      SESSION_START: '#a78bfa',
+      SESSION_END:   '#a78bfa'
+    };
+    const color = typeColors[entry.type] || '#9ca3af';
+
+    const row = document.createElement('tr');
+    row.style.borderBottom = '1px solid #1f2937';
+    row.innerHTML = `
+      <td style="padding:2px 5px;color:#9ca3af">${mm}:${ss}</td>
+      <td style="padding:2px 5px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${entry.studentName || '—'}</td>
+      <td style="padding:2px 5px;text-align:center">${entry.au4  !== null && entry.au4  !== undefined ? entry.au4  : '—'}</td>
+      <td style="padding:2px 5px;text-align:center">${entry.au7  !== null && entry.au7  !== undefined ? entry.au7  : '—'}</td>
+      <td style="padding:2px 5px;text-align:center">${entry.au12 !== null && entry.au12 !== undefined ? entry.au12 : '—'}</td>
+      <td style="padding:2px 5px;text-align:center;color:${this.getColor(entry.confusionRate || 0)}">${entry.confusionRate ?? '—'}%</td>
+      <td style="padding:2px 5px;color:${color}">${entry.type}</td>
+      <td style="padding:2px 5px">${entry.response || ''}</td>
+    `;
+    tbody.appendChild(row);
+
+    // Auto-scroll to latest
+    const wrap = this.elements.dashboard?.querySelector('#cs-log-table-wrap');
+    if (wrap) wrap.scrollTop = wrap.scrollHeight;
+  }
+
+  updateDashboard(participants = null) {
+    if (participants) this.participants = participants;
+    if (!this.elements.dashboard) return;
+
+    const sorted = [...this.participants]
+      .filter(p => p.role === 'student')
+      .sort((a, b) => {
+        // Confused students first, then detection-off last
+        const aOff = a.detectionEnabled === false;
+        const bOff = b.detectionEnabled === false;
+        if (aOff !== bOff) return aOff ? 1 : -1;
+        if (a.isConfused !== b.isConfused) return b.isConfused ? 1 : -1;
+        return 0;
+      });
+
+    const activeStudents  = sorted.filter(s => s.detectionEnabled !== false);
+    const confusedCount   = activeStudents.filter(s => s.isConfused).length;
+    this.overallConfusion = activeStudents.length > 0 ? Math.round((confusedCount / activeStudents.length) * 100) : 0;
+
+    const overallEl = this.elements.dashboard.querySelector('#cs-overall-rate');
+    if (overallEl) {
+      overallEl.textContent = `${confusedCount} / ${activeStudents.length}`;
+      overallEl.style.color = confusedCount > 0 ? '#ef4444' : '#4ade80';
+    }
+
+    const timeEl = this.elements.dashboard.querySelector('#cs-session-time');
+    if (timeEl) timeEl.textContent = this.formatTime(this.sessionTime);
+
+    const listEl = this.elements.dashboard.querySelector('#cs-participants');
+    if (listEl) {
+      if (sorted.length === 0) {
+        listEl.innerHTML = '<div class="cs-no-students">No students with detection enabled</div>';
+      } else {
+        listEl.innerHTML = sorted.map(s => this.getParticipantHTML(s)).join('');
+        sorted.forEach(s => {
+          const interveneBtn = listEl.querySelector(`#cs-card-intervene-${CSS.escape(s.id)}`);
+          if (interveneBtn) {
+            interveneBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              if (this.callbacks.onIntervene) this.callbacks.onIntervene(s);
+              this.confirmedConfusions.delete(s.id);
+              this.activeInterventions.add(s.id);
+              this.updateDashboard();
+            });
+          }
+          const stopBtn = listEl.querySelector(`#cs-card-stop-${CSS.escape(s.id)}`);
+          if (stopBtn) {
+            stopBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              if (this.callbacks.onStopIntervention) this.callbacks.onStopIntervention(s);
+              this.activeInterventions.delete(s.id);
+              this.updateDashboard();
+            });
+          }
+        });
+      }
+    }
+
+    const now = Date.now();
+    sorted.forEach(s => {
+      if (s.detectionEnabled === false) return;
+      const lastLog = this.lastLogTime.get(s.id) || 0;
+
+      if (now - lastLog >= 10000) {
