@@ -428,3 +428,93 @@ class UIInjector {
       }
     }
 
+    this.sessionLog.push({
+      timestamp: now,
+      studentId: studentId,
+      studentName: studentName,
+      confusionRate: 0,
+      confirmed: true,
+      intervention: tutorName || 'Tutor'
+    });
+  }
+
+
+  showStudentStatus(enabled = true) {
+    if (this.elements.studentStatus) {
+      this.elements.studentStatus.remove();
+    }
+
+    this.state.detectionEnabled = enabled;
+
+    this.elements.studentStatus = document.createElement('div');
+    this.elements.studentStatus.className = 'cs-student-status';
+    this.elements.studentStatus.innerHTML = `
+      <div class="cs-status-header">
+        <span class="cs-logo" style="font-size:13px;"><span class="cs-logo-purple">Confu</span><span class="cs-logo-white">Sense</span></span>
+      </div>
+      <div class="cs-status-body">
+        <div class="cs-toggle-row">
+          <span class="cs-toggle-label">Confusion detection ON/OFF</span>
+          <div class="cs-toggle-container">
+            <span class="cs-toggle-text ${enabled ? 'cs-on' : 'cs-off'}">${enabled ? 'On' : 'Off'}</span>
+            <div class="cs-toggle-switch ${enabled ? 'on' : 'off'}">
+              <div class="cs-toggle-knob"></div>
+            </div>
+          </div>
+        </div>
+        <div class="cs-status-info">We analyse micro-expressions only during active calls.</div>
+      </div>
+    `;
+
+    this.elements.container.appendChild(this.elements.studentStatus);
+    this.state.studentStatusVisible = true;
+
+    const toggleSwitch = this.elements.studentStatus.querySelector('.cs-toggle-switch');
+    toggleSwitch?.addEventListener('click', () => {
+      this.state.detectionEnabled = !this.state.detectionEnabled;
+      this.updateStudentStatusUI(this.state.detectionEnabled);
+      if (this.callbacks.onToggleDetection) {
+        this.callbacks.onToggleDetection(this.state.detectionEnabled);
+      }
+    });
+
+    this.setupDrag(this.elements.studentStatus, '.cs-status-header');
+  }
+
+  updateStudentStatus(enabled) {
+    this.state.detectionEnabled = enabled;
+    this.updateStudentStatusUI(enabled);
+  }
+
+  updateStudentStatusUI(enabled) {
+    if (!this.elements.studentStatus) return;
+    const toggleSwitch = this.elements.studentStatus.querySelector('.cs-toggle-switch');
+    const toggleText = this.elements.studentStatus.querySelector('.cs-toggle-text');
+    if (toggleSwitch) toggleSwitch.className = `cs-toggle-switch ${enabled ? 'on' : 'off'}`;
+    if (toggleText) {
+      toggleText.textContent = enabled ? 'On' : 'Off';
+      toggleText.className = `cs-toggle-text ${enabled ? 'cs-on' : 'cs-off'}`;
+    }
+  }
+
+  hideStudentStatus() {
+    if (this.elements.studentStatus) {
+      this.elements.studentStatus.remove();
+      this.elements.studentStatus = null;
+      this.state.studentStatusVisible = false;
+    }
+  }
+
+
+  showStudentPopup(onResponse = null) {
+    if (this.elements.popup) this.elements.popup.remove();
+    if (this.popupTimeout) clearTimeout(this.popupTimeout);
+
+    this.elements.popup = document.createElement('div');
+    this.elements.popup.className = 'cs-popup';
+    this.elements.popup.innerHTML = `
+      <div class="cs-popup-header">
+        <span class="cs-logo" style="font-size:14px;"><span class="cs-logo-purple">Confu</span><span class="cs-logo-white">Sense</span></span>
+      </div>
+      <div class="cs-popup-body">
+        <span class="cs-popup-emoji">🤔</span>
