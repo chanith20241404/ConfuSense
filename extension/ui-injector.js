@@ -1248,3 +1248,119 @@ class UIInjector {
       const vh = window.innerHeight;
 
       let left = rect.left;
+      let top = rect.top;
+      let clamped = false;
+
+      if (left + rect.width > vw) { left = vw - rect.width; clamped = true; }
+      if (left < 0) { left = 0; clamped = true; }
+      if (top + rect.height > vh) { top = vh - rect.height; clamped = true; }
+      if (top < 0) { top = 0; clamped = true; }
+
+      if (clamped) {
+        element.style.left = `${left}px`;
+        element.style.top = `${top}px`;
+      }
+    };
+
+    handle.addEventListener('mousedown', (e) => {
+      if (e.target.tagName === 'BUTTON') return;
+      isDragging = true;
+      handle.style.cursor = 'grabbing';
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = element.getBoundingClientRect();
+      initialX = rect.left;
+      initialY = rect.top;
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const newLeft = initialX + e.clientX - startX;
+      const newTop = initialY + e.clientY - startY;
+
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const rect = element.getBoundingClientRect();
+      element.style.left = `${Math.max(0, Math.min(newLeft, vw - rect.width))}px`;
+      element.style.top = `${Math.max(0, Math.min(newTop, vh - rect.height))}px`;
+      element.style.right = 'auto';
+      element.style.bottom = 'auto';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        handle.style.cursor = 'grab';
+      }
+    });
+
+    window.addEventListener('resize', clampToViewport);
+  }
+
+
+  startSessionTimer() {
+    this.sessionStartTime = Date.now();
+    this.timerInterval = setInterval(() => {
+      this.sessionTime = Math.floor((Date.now() - this.sessionStartTime) / 1000);
+      if (this.state.dashboardVisible && !this.state.dashboardMinimized) {
+        const timeEl = this.elements.dashboard?.querySelector('#cs-session-time');
+        if (timeEl) timeEl.textContent = this.formatTime(this.sessionTime);
+      }
+    }, 1000);
+  }
+
+  showStudentWidget(enabled = true, statusText = null) {
+    this.showStudentStatus(enabled);
+  }
+
+  showConfusionPopup(callback) {
+    this.showStudentPopup((confirmed, timedOut) => {
+      if (timedOut) {
+        if (callback) callback(null);
+      } else {
+        if (callback) callback(confirmed ? true : false);
+      }
+    });
+  }
+
+  showAnalytics(data, callback) {
+    if (data && data.students) {
+      data.students.forEach(s => {
+        if (!s.id) s.id = s.name;
+        (s.events || []).forEach(e => {
+          this.sessionLog.push({
+            timestamp:     e.timestamp || Date.now(),
+            studentId:     s.id || s.name,
+            studentName:   s.name,
+            confusionRate: Math.round((e.confirmationRate || 0) * 100),
+            confirmed:     true,
+            intervention:  e.intervened ? 'Intervened' : 'None'
+          });
+        });
+      });
+    }
+
+    this._analyticsCallback = callback;
+    this.generatePDFReport().then(() => {
+      if (callback) callback('download');
+    }).catch(() => {
+      if (callback) callback('download');
+    });
+  }
+
+
+  destroy() {
+    if (this.timerInterval) clearInterval(this.timerInterval);
+    if (this.popupTimeout) clearTimeout(this.popupTimeout);
+    if (this.elements.container) this.elements.container.remove();
+    this.elements.container     = null;
+    this.elements.dashboard     = null;
+    this.elements.dashboardBubble = null;
+    this.elements.studentStatus = null;
+    this.elements.popup         = null;
+    this.elements.alert         = null;
+  }
+}
+
+window.ConfuSenseUI = UIInjector;
