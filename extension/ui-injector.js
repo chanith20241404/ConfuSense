@@ -608,3 +608,93 @@ class UIInjector {
 
   showAlert(student) { this.showTutorAlert(student); }
   hideAlert() { this.hideTutorAlert(); }
+
+
+  async generatePDFReport() {
+    // Show loading
+    const overlay = document.createElement('div');
+    overlay.className = 'cs-pdf-overlay';
+    overlay.innerHTML = `
+      <div class="cs-pdf-loading">
+        <div class="cs-pdf-loading-spinner"></div>
+        <div>Generating Session Report...</div>
+      </div>
+    `;
+    this.elements.container.appendChild(overlay);
+
+    try {
+        this._exportSessionCSV();
+      // Generate visual PDF
+      await this._buildAndDownloadPDF();
+    } catch (err) {
+      console.error('[ConfuSense] PDF generation error:', err);
+      this._exportSessionCSV();
+    } finally {
+      overlay.remove();
+    }
+  }
+
+  _getStudentReportData() {
+    const sessionDurationMs = Math.max(Date.now() - this.sessionStartTime, 1);
+    const sessionStartMs = this.sessionStartTime || Date.now();
+    const students = [];
+
+    // participants are all students (from state.students Map)
+    this.participants.forEach(p => {
+      const events = (p.confusionEvents || []).map(e => ({
+        timestamp:  e.timestamp || 0,
+        durationMs: e.durationMs || 30000,
+        intervened: !!e.intervened,
+      }));
+
+      const interventionCount = events.filter(e => e.intervened).length;
+      const totalConfusionSec = events.reduce((s, e) => s + (e.durationMs / 1000), 0);
+      const overallRate = Math.min(100, Math.round((totalConfusionSec / (sessionDurationMs / 1000)) * 100));
+
+      students.push({
+        id:               p.id,
+        name:             p.name,
+        timesConfused:    events.length,
+        overallRate:      p.sessionConfusionPct != null ? p.sessionConfusionPct : overallRate,
+        totalConfusionSec,
+        events,
+        interventions:    events.filter(e => e.intervened),
+        sessionStartMs,
+      });
+    });
+
+    return students.sort((a, b) => b.timesConfused - a.timesConfused);
+  }
+
+  async _buildAndDownloadPDF() {
+    const students = this._getStudentReportData();
+
+    if (students.length === 0) {
+      const fallback = this.participants.filter(p => p.role === 'student');
+      if (fallback.length === 0) {
+        console.warn('[ConfuSense] No student data to report');
+        return;
+      }
+      fallback.forEach(p => {
+        students.push({
+          id: p.id, name: p.name,
+          overallRate: Math.round(p.confusionRate || 0),
+          currentRate: Math.round(p.confusionRate || 0),
+          readings: [], events: [], interventions: [],
+          totalConfusionSec: 0
+        });
+      });
+    }
+
+    const reportDiv = document.createElement('div');
+    reportDiv.style.cssText = `
+      position: fixed; left: -9999px; top: 0;
+      width: 480px; font-family: 'Segoe UI', Arial, sans-serif;
+      background: #0a0a18; color: #fff; padding: 24px;
+    `;
+
+    let html = `
+      <div style="text-align:center;font-size:20px;font-weight:bold;padding:12px 0 22px;color:#fff;">
+        Session Report
+      </div>
+    `;
