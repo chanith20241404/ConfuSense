@@ -968,3 +968,93 @@ class UIInjector {
           const mm = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
           const ss = String(elapsedSec % 60).padStart(2, '0');
 
+          const durSec = Math.round((evt.durationMs || 0) / 1000);
+          const dm = String(Math.floor(durSec / 60)).padStart(2, '0');
+          const ds = String(durSec % 60).padStart(2, '0');
+
+          // Confused dot + time
+          ctx.fillStyle = '#f87171';
+          ctx.font = '9px Segoe UI, sans-serif';
+          ctx.fillText('\u25CF', cx + CARD_PAD, ey + 10);
+          ctx.fillStyle = '#c0c0d0';
+          ctx.font = '9px Segoe UI, sans-serif';
+          ctx.fillText(`${mm}:${ss}`, cx + CARD_PAD + 10, ey + 10);
+
+          // Duration
+          ctx.textAlign = 'right';
+          ctx.fillStyle = '#9898b8';
+          ctx.fillText(`${dm}:${ds}`, cx + CARD_PAD + 130, ey + 10);
+
+          // Intervened status
+          if (evt.intervened) {
+            ctx.fillStyle = '#3b82f6';
+            ctx.fillText('Yes', cx + CARD_W - CARD_PAD, ey + 10);
+          } else {
+            ctx.fillStyle = '#6b7280';
+            ctx.fillText('No', cx + CARD_W - CARD_PAD, ey + 10);
+          }
+          ctx.textAlign = 'left';
+
+          ey += EVENT_ROW_H;
+        });
+      }
+
+      y += CARD_H + CARD_GAP;
+    });
+
+    const totalDetections = students.reduce((s, st) => s + st.timesConfused, 0);
+    const classAvgRate = students.length > 0
+      ? Math.round(students.reduce((s, st) => s + st.overallRate, 0) / students.length)
+      : 0;
+    const cx = PAD;
+
+    ctx.shadowColor = 'rgba(90, 80, 220, 0.2)';
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 4;
+
+    const summaryGrad = ctx.createLinearGradient(cx, y, cx, y + SUMMARY_H);
+    summaryGrad.addColorStop(0, 'rgba(90, 80, 200, 0.35)');
+    summaryGrad.addColorStop(1, 'rgba(60, 55, 160, 0.2)');
+    ctx.fillStyle = summaryGrad;
+    ctx.strokeStyle = 'rgba(130, 120, 255, 0.5)';
+    ctx.lineWidth = 1;
+    this._roundRect(ctx, cx, y, CARD_W, SUMMARY_H, 16);
+
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 14px Segoe UI, sans-serif';
+    ctx.fillText('Class Summary', cx + CARD_PAD, y + 28);
+
+    const colW = CARD_W / 3;
+
+    ctx.fillStyle = '#9898b8';
+    ctx.font = '10px Segoe UI, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Total Detections', cx + colW * 0.5, y + 52);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 30px Segoe UI, sans-serif';
+    ctx.fillText(`${totalDetections}`, cx + colW * 0.5, y + 88);
+
+    const avgColor = classAvgRate >= 70 ? '#f87171' : classAvgRate >= 50 ? '#fbbf24' : '#4ade80';
+    ctx.fillStyle = '#9898b8';
+    ctx.font = '10px Segoe UI, sans-serif';
+    ctx.fillText('Class Avg Confusion', cx + colW * 1.5, y + 52);
+    ctx.fillStyle = avgColor;
+    ctx.font = 'bold 30px Segoe UI, sans-serif';
+    ctx.fillText(`${classAvgRate}%`, cx + colW * 1.5, y + 88);
+
+    ctx.fillStyle = '#9898b8';
+    ctx.font = '10px Segoe UI, sans-serif';
+    ctx.fillText('Students', cx + colW * 2.5, y + 52);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 30px Segoe UI, sans-serif';
+    ctx.fillText(`${students.length}`, cx + colW * 2.5, y + 88);
+
+    ctx.textAlign = 'left';
+    y += SUMMARY_H + CARD_GAP;
+
+    ctx.fillStyle = '#50506a';
+    ctx.font = '8px Segoe UI, sans-serif';
+    ctx.textAlign = 'center';
