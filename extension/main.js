@@ -828,3 +828,102 @@ class ConfuSenseApp {
     a.href     = url;
     a.download = `confusense_analytics_${this.state.meetingId || Date.now()}.csv`;
     a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  getStudentsArray() {
+    return Array.from(this.state.students.values());
+  }
+
+  findStudentByName(name) {
+    if (!name) return null;
+    const needle = name.toLowerCase().trim();
+
+    for (const [id, s] of this.state.students) {
+      if (s.name?.toLowerCase().trim() === needle) return id;
+    }
+
+    for (const [id, s] of this.state.students) {
+      const sName = s.name?.toLowerCase().trim();
+      if (sName && (sName.includes(needle) || needle.includes(sName))) return id;
+    }
+
+    return null;
+  }
+
+  updateStudentConfusionPct(student) {
+    const sessionMs = this.state.sessionStartTime
+      ? Date.now() - this.state.sessionStartTime
+      : 1;
+
+    const confirmedMs = (student.confusionEvents || []).reduce((a, e) => a + (e.durationMs || 30000), 0);
+    student.sessionConfusionPct = Math.min(100, Math.round((confirmedMs / sessionMs) * 100));
+  }
+
+  handleExtensionMessage(msg, respond) {
+    switch (msg.type) {
+      case 'GET_STATE':
+        respond({
+          isInMeeting:  this.state.isInMeeting,
+          role:         this.state.role,
+          enabled:      this.settings.enabled,
+          selfName:     this.state.selfName,
+          participants: this.getStudentsArray(),
+        });
+        break;
+
+      case 'SETTINGS_UPDATE': {
+        const wasEnabled = this.settings.enabled;
+        this.settings = { ...this.settings, ...msg.settings };
+        const nowEnabled = this.settings.enabled;
+
+        if (wasEnabled !== nowEnabled) {
+          if (!nowEnabled) {
+            if (this.videoProc) { this.videoProc.stop(); this.videoProc = null; }
+            this.state.confusionStartTime = null;
+            if (this.state.popupShowing) {
+              this.ui.hidePopup?.();
+              this.state.popupShowing = false;
+            }
+          } else if (this.state.role === 'student' && this.state.isInMeeting && !this.videoProc) {
+            // Start camera directly (don't call activateStudentMode to avoid widget recreation)
+            const vp = new window.ConfuSenseVideoProcessor();
+            vp.onCameraLost = () => this.handleCameraLost();
+            vp.start(this.uuid, this.state.meetingId, this.settings.serverUrl).then(() => {
+              this.videoProc = vp;
+              if (Date.now() < this._framePauseUntil) vp.pause();
+            }).catch(() => {
+              this.settings.enabled = false;
+              chrome.storage.local.set({ confusenseSettings: this.settings });
+              this.ui.updateStudentStatus?.(false);
+            });
+          }
+          // Sync to backend
+          if (this.state.isInMeeting && this.state.meetingId) {
+            this.syncDetectionStatus(nowEnabled);
+          }
+          // Sync the widget toggle state
+          this.ui.updateStudentStatus?.(nowEnabled);
+        }
+        respond({ ok: true });
+        break;
+      }
+
+      default:
+        respond({ ok: false });
+    }
+  }
+}
+
+
+function bootConfuSense() {
+  if (window.__confuSenseApp) return;
+  window.__confuSenseApp = new ConfuSenseApp();
+  window.__confuSenseApp.init();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootConfuSense);
+} else {
+  bootConfuSense();
+}
