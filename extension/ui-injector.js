@@ -78,3 +78,83 @@ class UIInjector {
   }
 
   formatTimeMS(seconds) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+
+
+  showDashboard(participants = [], sessionStartTime = null) {
+    if (sessionStartTime) this.sessionStartTime = sessionStartTime;
+    this.participants = participants;
+
+    if (this.state.dashboardMinimized && this.elements.dashboardBubble) {
+      this.updateBubble();
+      return;
+    }
+
+    if (this.elements.dashboardBubble) {
+      this.elements.dashboardBubble.classList.add('cs-hidden');
+    }
+
+    if (this.elements.dashboard) {
+      this.updateDashboard();
+      this.elements.dashboard.classList.remove('cs-hidden');
+      return;
+    }
+
+    this.elements.dashboard = document.createElement('div');
+    this.elements.dashboard.className = 'cs-dashboard';
+    this.elements.dashboard.innerHTML = this.getDashboardHTML();
+
+    this.elements.container.appendChild(this.elements.dashboard);
+    this.state.dashboardVisible = true;
+
+    this.bindDashboardEvents();
+    this.updateDashboard();
+    this.setupDrag(this.elements.dashboard, '.cs-header');
+  }
+
+  getDashboardHTML() {
+    return `
+      <div class="cs-header">
+        <span class="cs-logo"><span class="cs-logo-purple">Confu</span><span class="cs-logo-white">Sense</span></span>
+        <div class="cs-traffic-buttons">
+          <button class="cs-traffic-btn cs-btn-yellow" id="cs-minimize" title="Minimize"></button>
+          <button class="cs-traffic-btn cs-btn-orange" id="cs-collapse" title="Collapse"></button>
+          <button class="cs-traffic-btn cs-btn-red" id="cs-close" title="Close"></button>
+        </div>
+      </div>
+      <div class="cs-body">
+        <div class="cs-dashboard-title">Dashboard</div>
+        <div class="cs-overall-card">
+          <div class="cs-overall-label">Students Confused</div>
+          <div id="cs-overall-rate" class="cs-overall-value" style="color: #9ca3af">0 / 0</div>
+        </div>
+        <div class="cs-session-info">
+          <span class="cs-session-dot"></span>
+          <span>Live Session</span>
+          <span id="cs-session-time" class="cs-session-time">00:00</span>
+        </div>
+
+        <div id="cs-participants" class="cs-participants"></div>
+
+        <button id="cs-export" class="cs-export-btn">📊 Download Analytics</button>
+      </div>
+    `;
+  }
+
+  appendLogRow(entry) {
+    const tbody = this.elements.dashboard?.querySelector('#cs-log-tbody');
+    if (!tbody) return;
+
+    const t0 = this.sessionStartTime || Date.now();
+    const elapsed = Math.max(0, Math.floor((entry.timestamp - t0) / 1000));
+    const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const ss = String(elapsed % 60).padStart(2, '0');
+
+    const typeColors = {
+      DETECTION:   '#6b7280',
+      POPUP_SHOWN: '#f59e0b',
