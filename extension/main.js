@@ -748,3 +748,83 @@ class ConfuSenseApp {
   handleDismiss(student) {
     const s = this.state.students.get(student.id);
     if (s) {
+      s.isConfused     = false;
+      s.showAlert      = false;
+      s.alertDismissed = true;
+      s.dismissedUntil = Date.now() + 300000; // 5 mins
+    }
+    this.ui.updateDashboard(this.getStudentsArray());
+    setTimeout(() => {
+      const st = this.state.students.get(student.id);
+      if (st) { st.alertDismissed = false; st.dismissedUntil = 0; }
+    }, 300000);
+  }
+
+  showAnalyticsOverlay() {
+    const sessionDurationMs = this.state.sessionStartTime
+      ? Date.now() - this.state.sessionStartTime
+      : 1;
+
+    const students = this.getStudentsArray().map(s => ({
+      name: s.name,
+      overallConfusionPct: s.sessionConfusionPct || 0,
+      events: (s.confusionEvents || []).map(e => ({
+        timestamp:        e.timestamp,
+        durationMs:       e.durationMs || 30000,
+        confirmationRate: e.confirmationRate || 0.75,
+        intervened:       e.intervened || false,
+        intervenedAt:     e.intervenedAt || null,
+        stoppedAt:        e.stoppedAt || null,
+      }))
+    }));
+
+    this.ui.showAnalytics({ students, sessionDurationMs }, (action) => {
+      if (action === 'download') this.downloadCSV(students, sessionDurationMs);
+    });
+  }
+
+  downloadCSV(students, sessionDurationMs) {
+    const sessionMins = Math.round(sessionDurationMs / 60000);
+    const totalDetections = students.reduce((s, st) => s + (st.events?.length || 0), 0);
+    const classAvgPct = students.length > 0
+      ? Math.round(students.reduce((s, st) => s + (st.overallConfusionPct || 0), 0) / students.length)
+      : 0;
+
+    const lines = [
+      'Session Analytics - ConfuSense',
+      '',
+      `Session Duration: ${sessionMins} minutes`,
+      `Students: ${students.length}`,
+      '',
+    ];
+
+    for (const s of students) {
+      const timesConfused = s.events?.length || 0;
+      const interventionCount = s.events?.filter(e => e.intervened).length || 0;
+      lines.push(`Student: ${s.name}`);
+      lines.push(`Times Confused: ${timesConfused}`);
+      lines.push(`Avg Confusion: ${Math.round(s.overallConfusionPct || 0)}%`);
+      lines.push(`Interventions: ${interventionCount}`);
+      lines.push('Confusion Detected,Duration(s),Intervened,Intervention Started,Intervention Stopped');
+      for (const e of (s.events || [])) {
+        const detected = new Date(e.timestamp).toISOString();
+        const dur = Math.round((e.durationMs || 0) / 1000);
+        const intervened = e.intervened ? 'Yes' : 'No';
+        const interventionStarted = e.intervenedAt ? new Date(e.intervenedAt).toISOString() : '';
+        const interventionStopped = e.stoppedAt ? new Date(e.stoppedAt).toISOString() : '';
+        lines.push(`${detected},${dur},${intervened},${interventionStarted},${interventionStopped}`);
+      }
+      lines.push('');
+    }
+
+    lines.push('--- Class Summary ---');
+    lines.push(`Total Detections,${totalDetections}`);
+    lines.push(`Class Avg Confusion,${classAvgPct}%`);
+    lines.push(`Students,${students.length}`);
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `confusense_analytics_${this.state.meetingId || Date.now()}.csv`;
+    a.click();
