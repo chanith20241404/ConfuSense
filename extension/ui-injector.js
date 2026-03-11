@@ -1148,3 +1148,103 @@ class UIInjector {
     const imgHeader = `5 0 obj\n<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imgArray.length} >>\nstream\n`;
     addObj(imgHeader); pdf += imgHeader;
 
+    const textEncoder = new TextEncoder();
+    const pdfBefore = textEncoder.encode(pdf);
+    const streamEnd = textEncoder.encode('\nendstream\nendobj\n');
+    const xrefOffset = pdfBefore.length + imgArray.length + streamEnd.length;
+    const xrefStr = `xref\n0 6\n0000000000 65535 f \n` +
+      objects.map(o => `${o.offset.toString().padStart(10, '0')} 00000 n `).join('\n') +
+      `\ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+    const xrefBytes = textEncoder.encode(xrefStr);
+
+    const totalLength = pdfBefore.length + imgArray.length + streamEnd.length + xrefBytes.length;
+    const finalPdf = new Uint8Array(totalLength);
+    finalPdf.set(pdfBefore, 0);
+    finalPdf.set(imgArray, pdfBefore.length);
+    finalPdf.set(streamEnd, pdfBefore.length + imgArray.length);
+    finalPdf.set(xrefBytes, pdfBefore.length + imgArray.length + streamEnd.length);
+
+    const blob = new Blob([finalPdf], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  _exportSessionCSV() {
+    const students = this._getStudentReportData();
+    const sessionDuration = this.formatTime(this.sessionTime);
+    const sessionStart = this.sessionStartTime || Date.now();
+
+    const totalDetections = students.reduce((s, st) => s + st.timesConfused, 0);
+    const classAvgRate = students.length > 0
+      ? Math.round(students.reduce((s, st) => s + st.overallRate, 0) / students.length)
+      : 0;
+
+    const lines = [
+      ['ConfuSense Session Report'],
+      [`Session Date: ${new Date().toLocaleDateString()}`, `Duration: ${sessionDuration}`, `Students: ${students.length}`],
+      [],
+      ['--- Student Summary ---'],
+      ['Student Name', 'Times Confused', 'Avg Confusion (%)', 'Total Confusion Time (sec)', 'Interventions']
+    ];
+
+    students.forEach(s => {
+      lines.push([
+        s.name,
+        s.timesConfused,
+        s.overallRate,
+        Math.round(s.totalConfusionSec),
+        s.interventions.length
+      ]);
+    });
+
+    lines.push([]);
+    lines.push(['--- Confusion Events Detail ---']);
+    lines.push(['Student Name', 'Detected At (mm:ss)', 'Duration (sec)', 'Intervened']);
+
+    students.forEach(s => {
+      (s.events || []).forEach(evt => {
+        const elapsed = Math.max(0, Math.floor((evt.timestamp - sessionStart) / 1000));
+        const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+        const ss = String(elapsed % 60).padStart(2, '0');
+        lines.push([
+          s.name,
+          `${mm}:${ss}`,
+          Math.round((evt.durationMs || 0) / 1000),
+          evt.intervened ? 'Yes' : 'No'
+        ]);
+      });
+    });
+
+    lines.push([]);
+    lines.push(['--- Class Summary ---']);
+    lines.push(['Total Detections', 'Class Avg Confusion (%)', 'Students']);
+    lines.push([totalDetections, classAvgRate, students.length]);
+
+    const csv = lines.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `ConfuSense_Session_Data_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+  }
+
+
+  setupDrag(element, handleSelector = null) {
+    const handle = handleSelector ? element.querySelector(handleSelector) : element;
+    if (!handle) return;
+
+    let isDragging = false;
+    let startX, startY, initialX, initialY;
+
+    handle.style.cursor = 'grab';
+
+    const clampToViewport = () => {
+      const rect = element.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      let left = rect.left;
