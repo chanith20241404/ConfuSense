@@ -43,3 +43,48 @@ class PopupController {
   }
 
   bindEvents() {
+    document.getElementById('enableToggle').addEventListener('change', (e) => {
+      this.settings.enabled = e.target.checked;
+      this.saveSettings();
+    });
+    
+    document.getElementById('privacyBtn').addEventListener('click', () => {
+      chrome.tabs.create({ url: 'http://localhost:3000/privacy' });
+    });
+    
+    document.getElementById('supportBtn').addEventListener('click', () => {
+      chrome.tabs.create({ url: 'http://localhost:3000/support' });
+    });
+  }
+
+  updateUI() {
+    document.getElementById('enableToggle').checked = this.settings.enabled;
+  }
+
+  async checkMeetStatus() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.url?.includes('meet.google.com')) {
+        try {
+          const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_STATE' });
+          const statusBar = document.getElementById('statusBar');
+          const statusText = document.getElementById('statusText');
+
+          if (response?.isInMeeting) {
+            statusBar.classList.add('visible');
+            const participantCount = response.participants?.length || 0;
+            if (response.role === 'tutor') {
+              statusText.textContent = `Dashboard active — ${participantCount} student${participantCount !== 1 ? 's' : ''}`;
+            } else {
+              statusText.textContent = 'Monitoring active';
+            }
+          } else {
+            statusBar.classList.remove('visible');
+          }
+        } catch (e) {}
+      }
+    } catch (e) {}
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => new PopupController());
