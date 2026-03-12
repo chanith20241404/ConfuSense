@@ -98,3 +98,66 @@ export async function scoreBatchConfusion(frames: string[]): Promise<GeminiScore
       const jsonMatch = text.match(/\{[^}]+\}/);
       if (!jsonMatch) throw new Error(`No JSON in response: ${text}`);
 
+      const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+
+      const confusionScore = typeof parsed.confusionScore === 'number'
+        ? Math.max(0, Math.min(1, parsed.confusionScore))
+        : 0;
+      const engagementScore = typeof parsed.engagementScore === 'number'
+        ? Math.max(0, Math.min(1, parsed.engagementScore))
+        : 0.5;
+
+      return { confusionScore, engagementScore };
+    } catch (err) {
+      lastError = err;
+      if (attempt < MAX_ATTEMPTS) {
+        await delay(Math.pow(2, attempt - 1) * 500);
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+export async function scoreConfusion(base64Jpeg: string): Promise<GeminiScore> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const response = await genai.models.generateContent({
+        model: 'gemini-2.5-flash-lite',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inlineData: { mimeType: 'image/jpeg', data: base64Jpeg } },
+              { text: CONFUSION_PROMPT },
+            ],
+          },
+        ],
+      });
+
+      const text = response.text ?? '';
+      const jsonMatch = text.match(/\{[^}]+\}/);
+      if (!jsonMatch) throw new Error(`No JSON in response: ${text}`);
+
+      const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+
+      const confusionScore = typeof parsed.confusionScore === 'number'
+        ? Math.max(0, Math.min(1, parsed.confusionScore))
+        : 0;
+      const engagementScore = typeof parsed.engagementScore === 'number'
+        ? Math.max(0, Math.min(1, parsed.engagementScore))
+        : 0.5;
+
+      return { confusionScore, engagementScore };
+    } catch (err) {
+      lastError = err;
+      if (attempt < MAX_ATTEMPTS) {
+        await delay(Math.pow(2, attempt - 1) * 500);
+      }
+    }
+  }
+
+  throw lastError;
+}
