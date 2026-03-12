@@ -218,3 +218,63 @@ export async function getStudentEngagement(meetingId: string): Promise<StudentEn
     if (!confByUuid.has(row.uuid)) confByUuid.set(row.uuid, []);
     confByUuid.get(row.uuid)!.push({
       timestamp: row.timestamp,
+      durationMs: row.durationMs ?? 0,
+      intervened: (row.intervened ?? 0) === 1,
+      stoppedAt: row.interventionStoppedAt ?? null,
+    });
+  }
+
+  // Get intervention counts
+  const intRows = await db
+    .select({ studentUuid: interventions.studentUuid })
+    .from(interventions)
+    .where(eq(interventions.meetingId, meetingId));
+
+  const intCountByUuid = new Map<string, number>();
+  for (const row of intRows) {
+    intCountByUuid.set(row.studentUuid, (intCountByUuid.get(row.studentUuid) ?? 0) + 1);
+  }
+
+  // Get session start time for confusion % calc
+  const sessionStartRows = await db
+    .select({ joinedAt: sessions.joinedAt })
+    .from(sessions)
+    .where(eq(sessions.meetingId, meetingId))
+    .limit(1);
+  const sessionStartMs = sessionStartRows[0]?.joinedAt ?? Date.now();
+  const sessionDurationMs = Math.max(Date.now() - sessionStartMs, 1);
+
+  return studentUuids.map((uuid) => {
+    const scores = scoresByUuid.get(uuid) ?? [];
+    const latestScore = scores.length > 0 ? scores[scores.length - 1].score : null;
+    const rawEvents = confByUuid.get(uuid) ?? [];
+    const confusedMs = rawEvents.reduce((a, e) => a + (e.durationMs || 30000), 0);
+    const confusionPct = Math.min(100, Math.round((confusedMs / sessionDurationMs) * 100));
+
+    // Intervention is active if last confusion event is intervened but not yet stopped
+    const lastEvent = rawEvents.length > 0 ? rawEvents[rawEvents.length - 1] : null;
+    const interventionActive = lastEvent !== null && lastEvent.intervened && !lastEvent.stoppedAt;
+
+    return {
+      uuid,
+      name: nameMap.get(uuid) ?? null,
+      latestScore,
+      scores,
+      confusionEvents: rawEvents.map(e => ({
+        timestamp: e.timestamp,
+        durationMs: e.durationMs,
+        intervened: e.intervened,
+        intervenedAt: e.intervened ? e.timestamp + e.durationMs : null,
+        stoppedAt: e.stoppedAt,
+      })),
+      interventionCount: intCountByUuid.get(uuid) ?? 0,
+      confusionPct,
+      detectionEnabled: detectionMap.get(uuid) ?? true,
+      interventionActive,
+    };
+  });
+}
+
+// ── Confusion Events ─────────────────────────────────────────────────────────
+
+export async function insertConfusionEvent(
