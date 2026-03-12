@@ -1,0 +1,80 @@
+/* ============================================
+   ConfuSense v4.0 - Styles matching wireframes
+   ============================================ */
+
+#confusense-root {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 999999;
+  pointer-events: none;
+  overflow: visible;
+}
+#confusense-root * { pointer-events: auto; }
+
+/* Utilities */
+.cs-hidden { display: none !important; }
+
+/* ============================================
+   TUTOR DASHBOARD - matches wireframe exactly
+   Black background, blue glow border, purple accents
+   ============================================ */
+
+.cs-dashboard {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  width: 340px;
+  max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 100px);
+  background: #000000;
+  border-radius: 16px;
+  border: 1px solid rgba(60, 80, 200, 0.5);
+  box-shadow: 0 0 30px rgba(60, 80, 200, 0.15), 0 8px 32px rgba(0,0,0,0.6);
+  animation: cs-slide-in 0.3s ease-out;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes cs-slide-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Dashboard Header */
+.cs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: grab;
+}
+.cs-header:active { cursor: grabbing; }
+
+.cs-logo { font-size: 16px; font-weight: 600; }
+.cs-logo-purple { color: #8B5CF6; }
+.cs-logo-white { color: #ffffff; }
+
+.cs-traffic-buttons { display: flex; gap: 8px; }
+.cs-traffic-btn {
+  width: 12px; height: 12px; border-radius: 50%; border: none;
+  cursor: pointer; opacity: 0.85; transition: all 0.2s;
+}
+.cs-traffic-btn:hover { opacity: 1; transform: scale(1.2); }
+.cs-btn-yellow { background: #FBBF24; }
+.cs-btn-orange { background: #F97316; }
+.cs-btn-red { background: #EF4444; }
+
+/* Dashboard Title */
+.cs-dashboard-title {
+  text-align: center;
+  padding: 4px 16px 12px;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 500;
+}
+
