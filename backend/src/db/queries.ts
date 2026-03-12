@@ -98,3 +98,63 @@ const TUTOR_NOTIFICATION_TYPES: NotificationType[] = ['confusion_confirmed', 'st
 
 export async function getAndMarkNotificationsRead(uuid: string, role?: 'student' | 'host'): Promise<Notification[]> {
   const rows = await db
+    .select()
+    .from(notifications)
+    .where(and(eq(notifications.uuid, uuid), isNull(notifications.readAt)))
+    .orderBy(notifications.createdAt);
+
+  if (rows.length === 0) return [];
+
+  // Filter by role so student polling doesn't consume tutor notifications and vice versa
+  const allowedTypes = role === 'student'
+    ? STUDENT_NOTIFICATION_TYPES
+    : role === 'host'
+      ? TUTOR_NOTIFICATION_TYPES
+      : null;
+
+  const matched = allowedTypes
+    ? rows.filter(r => allowedTypes.includes(r.type as NotificationType))
+    : rows;
+
+  if (matched.length === 0) return [];
+
+  const ids = matched.map((r) => r.id);
+  await db
+    .update(notifications)
+    .set({ readAt: Date.now() })
+    .where(inArray(notifications.id, ids));
+
+  return matched.map((r) => ({
+    id:        r.id,
+    uuid:      r.uuid,
+    type:      r.type as NotificationType,
+    payload:   JSON.parse(r.payload) as NotificationPayload,
+    createdAt: r.createdAt,
+    readAt:    null,
+  }));
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
+export async function getActiveMeetings(sinceMs: number): Promise<MeetingSummary[]> {
+  const rows = await db
+    .select({
+      meetingId:    sessions.meetingId,
+      studentCount: sql<number>`COUNT(DISTINCT CASE WHEN ${sessions.role} = 'student' THEN ${sessions.uuid} END)`,
+      avgScore:     sql<number | null>`AVG(${engagementScores.score})`,
+      lastUpdated:  sql<number | null>`MAX(${engagementScores.scoredAt})`,
+    })
+    .from(sessions)
+    .leftJoin(
+      engagementScores,
+      and(
+        eq(sessions.uuid, engagementScores.uuid),
+        eq(sessions.meetingId, engagementScores.meetingId),
+      ),
+    )
+    .where(gt(sessions.joinedAt, sinceMs))
+    .groupBy(sessions.meetingId);
+
+  return rows.map((r) => ({
+    meetingId:    r.meetingId,
+    studentCount: r.studentCount,
