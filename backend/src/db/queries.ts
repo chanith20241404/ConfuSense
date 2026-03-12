@@ -158,3 +158,63 @@ export async function getActiveMeetings(sinceMs: number): Promise<MeetingSummary
   return rows.map((r) => ({
     meetingId:    r.meetingId,
     studentCount: r.studentCount,
+    avgScore:     r.avgScore ?? null,
+    lastUpdated:  r.lastUpdated ?? 0,
+  }));
+}
+
+export async function getStudentEngagement(meetingId: string): Promise<StudentEngagement[]> {
+  const studentRows = await db
+    .select({ uuid: sessions.uuid, detectionOn: sessions.detectionOn })
+    .from(sessions)
+    .where(and(eq(sessions.meetingId, meetingId), eq(sessions.role, 'student')));
+
+  const studentUuids = studentRows.map((r) => r.uuid);
+  if (studentUuids.length === 0) return [];
+
+  // Build detection status map
+  const detectionMap = new Map<string, boolean>();
+  for (const row of studentRows) {
+    detectionMap.set(row.uuid, (row.detectionOn ?? 1) === 1);
+  }
+
+  const scoreRows = await db
+    .select({
+      uuid:     engagementScores.uuid,
+      score:    engagementScores.score,
+      scoredAt: engagementScores.scoredAt,
+    })
+    .from(engagementScores)
+    .where(eq(engagementScores.meetingId, meetingId))
+    .orderBy(engagementScores.scoredAt);
+
+  const scoresByUuid = new Map<string, Array<{ score: number; scoredAt: number }>>();
+  for (const row of scoreRows) {
+    if (!scoresByUuid.has(row.uuid)) scoresByUuid.set(row.uuid, []);
+    scoresByUuid.get(row.uuid)!.push({ score: row.score, scoredAt: row.scoredAt });
+  }
+
+  // Get student names
+  const nameMap = new Map<string, string | null>();
+  for (const row of studentRows) {
+    nameMap.set(row.uuid, null);
+  }
+  const nameRows = await db
+    .select({ uuid: sessions.uuid, name: sessions.name })
+    .from(sessions)
+    .where(eq(sessions.meetingId, meetingId));
+  for (const row of nameRows) {
+    if (row.name) nameMap.set(row.uuid, row.name);
+  }
+
+  // Get confusion events
+  const confRows = await db
+    .select()
+    .from(confusionEvents)
+    .where(eq(confusionEvents.meetingId, meetingId));
+
+  const confByUuid = new Map<string, Array<{ timestamp: number; durationMs: number; intervened: boolean; stoppedAt: number | null }>>();
+  for (const row of confRows) {
+    if (!confByUuid.has(row.uuid)) confByUuid.set(row.uuid, []);
+    confByUuid.get(row.uuid)!.push({
+      timestamp: row.timestamp,
