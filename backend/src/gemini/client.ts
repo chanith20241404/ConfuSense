@@ -48,3 +48,53 @@ Do NOT flag these as confusion:
 IMPORTANT: Look at the overall pattern across all frames, not just individual frames.
 - If confusion appears in only 1-2 frames out of 20, the student is likely NOT confused (momentary expression).
 - If confusion is visible in 5+ frames, especially consecutive ones, the student is likely confused.
+- Weight recent frames (later in the sequence) more heavily than earlier ones.
+
+Rate the student's SUSTAINED confusion level from 0.0 to 1.0:
+- 0.0 = not confused at all across the sequence
+- 0.3 = mild uncertainty in a few frames
+- 0.5 = moderate confusion in several frames
+- 0.7 = clear sustained confusion across many frames
+- 1.0 = very confused throughout most of the sequence
+
+Also rate their overall engagement from 0.0 to 1.0 based on the full sequence.
+
+Respond ONLY with valid JSON:
+{"confusionScore": <number>, "engagementScore": <number>}`;
+
+const MAX_ATTEMPTS = 3;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export interface GeminiScore {
+  confusionScore: number;
+  engagementScore: number;
+}
+
+export async function scoreEngagement(base64Jpeg: string): Promise<number> {
+  const result = await scoreConfusion(base64Jpeg);
+  return result.engagementScore;
+}
+
+export async function scoreBatchConfusion(frames: string[]): Promise<GeminiScore> {
+  let lastError: unknown;
+
+  const parts: Array<{ inlineData: { mimeType: string; data: string } } | { text: string }> = [];
+  for (let i = 0; i < frames.length; i++) {
+    parts.push({ inlineData: { mimeType: 'image/jpeg', data: frames[i] } });
+  }
+  parts.push({ text: BATCH_CONFUSION_PROMPT });
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const response = await genai.models.generateContent({
+        model: 'gemini-2.5-flash-lite',
+        contents: [{ role: 'user', parts }],
+      });
+
+      const text = response.text ?? '';
+      const jsonMatch = text.match(/\{[^}]+\}/);
+      if (!jsonMatch) throw new Error(`No JSON in response: ${text}`);
+
