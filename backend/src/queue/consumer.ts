@@ -78,3 +78,43 @@ export async function startConsumer(): Promise<NatsConnection> {
           continue;
         }
 
+        const { confusionScore, engagementScore } = result;
+
+        // Store the engagement score
+        await insertEngagementScore({ uuid, meetingId, score: engagementScore, scoredAt: timestamp });
+
+        const lastNotify = lastNotifyAt.get(uuid) ?? 0;
+        const cooldownElapsed = Date.now() - lastNotify > NOTIFY_COOLDOWN_MS;
+
+        console.log(
+          `[Consumer] ${uuid.slice(0, 8)}… → batch confusion: ${confusionScore.toFixed(2)}, engagement: ${engagementScore.toFixed(2)} | threshold: ${CONFUSION_THRESHOLD} | cooldown: ${cooldownElapsed ? 'ready' : 'waiting'}`,
+        );
+
+        if (confusionScore >= CONFUSION_THRESHOLD && cooldownElapsed) {
+          lastNotifyAt.set(uuid, Date.now());
+
+          const studentName = await getStudentName(uuid, meetingId);
+
+          // Only notify the student — tutor is notified later when the student
+          // confirms confusion via POST /api/confusion/:uuid
+          const studentHasUnread = await hasUnreadNotification(uuid, 'low_engagement');
+          if (!studentHasUnread) {
+            await insertNotification(uuid, 'low_engagement', { score: confusionScore });
+            console.log(
+              `[Consumer] BATCH confusion ${confusionScore.toFixed(2)} → popup sent to ${studentName || uuid.slice(0, 8)}`,
+            );
+          }
+        }
+
+        msg.ack();
+      } catch (err) {
+        console.error('[Consumer] Error processing batch message:', err);
+        msg.nak();
+      }
+    }
+  })().catch((err: unknown) => {
+    console.error('[Consumer] Fatal error:', err);
+  });
+
+  return nc;
+}
