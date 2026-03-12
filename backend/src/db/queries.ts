@@ -278,3 +278,90 @@ export async function getStudentEngagement(meetingId: string): Promise<StudentEn
 // ── Confusion Events ─────────────────────────────────────────────────────────
 
 export async function insertConfusionEvent(
+  uuid: string, meetingId: string, timestamp: number,
+): Promise<number> {
+  const result = await db.insert(confusionEvents).values({
+    uuid, meetingId, timestamp,
+  }).returning({ id: confusionEvents.id });
+  return result[0].id;
+}
+
+export async function getConfusionEvents(meetingId: string, uuid?: string) {
+  const conditions = [eq(confusionEvents.meetingId, meetingId)];
+  if (uuid) conditions.push(eq(confusionEvents.uuid, uuid));
+  return db.select().from(confusionEvents).where(and(...conditions));
+}
+
+// ── Interventions ────────────────────────────────────────────────────────────
+
+export async function insertIntervention(
+  hostUuid: string, studentUuid: string, meetingId: string, timestamp: number,
+): Promise<void> {
+  await db.insert(interventions).values({ hostUuid, studentUuid, meetingId, timestamp });
+
+  // Mark last confusion event for this student as intervened
+  const events = await db
+    .select()
+    .from(confusionEvents)
+    .where(and(
+      eq(confusionEvents.uuid, studentUuid),
+      eq(confusionEvents.meetingId, meetingId),
+      eq(confusionEvents.intervened, 0),
+    ));
+  if (events.length > 0) {
+    const last = events[events.length - 1];
+    await db.update(confusionEvents)
+      .set({
+        intervened: 1,
+        intervenedAt: timestamp,
+        durationMs: Math.max(0, timestamp - last.timestamp),
+      })
+      .where(eq(confusionEvents.id, last.id));
+  }
+}
+
+export async function stopIntervention(
+  studentUuid: string, meetingId: string, timestamp: number,
+): Promise<void> {
+  // Find the last intervened confusion event that hasn't been stopped yet
+  const events = await db
+    .select()
+    .from(confusionEvents)
+    .where(and(
+      eq(confusionEvents.uuid, studentUuid),
+      eq(confusionEvents.meetingId, meetingId),
+      eq(confusionEvents.intervened, 1),
+      isNull(confusionEvents.interventionStoppedAt),
+    ));
+  if (events.length > 0) {
+    const last = events[events.length - 1];
+    // Duration = from when confusion was confirmed to when intervention stopped
+    const duration = Math.max(0, timestamp - last.timestamp);
+    await db.update(confusionEvents)
+      .set({ durationMs: duration, interventionStoppedAt: timestamp })
+      .where(eq(confusionEvents.id, last.id));
+  }
+}
+
+// ── Analytics ────────────────────────────────────────────────────────────────
+
+export async function getMeetingAnalytics(meetingId: string) {
+  const sessionRows = await db
+    .select()
+    .from(sessions)
+    .where(eq(sessions.meetingId, meetingId));
+
+  const host = sessionRows.find(r => r.role === 'host');
+  const studentSessions = sessionRows.filter(r => r.role === 'student');
+  const startTime = Math.min(...sessionRows.map(r => r.joinedAt));
+
+  const students = await getStudentEngagement(meetingId);
+
+  return {
+    meetingId,
+    tutorName: host?.name ?? 'Unknown',
+    startTime,
+    durationMs: Date.now() - startTime,
+    students,
+  };
+}
