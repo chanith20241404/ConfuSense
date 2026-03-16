@@ -118,3 +118,63 @@ export default function Meeting() {
           const dur = Math.round(e.durationMs / 1000);
           eventsHtml += `<tr><td style="padding:4px 8px;border:1px solid #333">${ts}</td><td style="padding:4px 8px;border:1px solid #333">${dur}s</td><td style="padding:4px 8px;border:1px solid #333">${e.intervened ? 'Yes' : 'No'}</td></tr>`;
         }
+
+        studentRows += `
+          <div style="margin-bottom:24px;page-break-inside:avoid">
+            <h3 style="margin:0 0 8px;font-size:16px">${name}</h3>
+            <div style="display:flex;gap:16px;margin-bottom:8px">
+              <span>Confusion: <b style="color:${confColor}">${s.confusionPct}%</b></span>
+              <span>Avg Engagement: <b style="color:${engColor}">${avgScore}%</b></span>
+              <span>Interventions: <b>${s.interventionCount}</b></span>
+              <span>Frames: <b>${s.scores.length}</b></span>
+            </div>
+            ${s.confusionEvents.length > 0 ? `
+              <table style="width:100%;border-collapse:collapse;font-size:12px">
+                <thead><tr style="background:#1a1a2e"><th style="padding:4px 8px;border:1px solid #333;text-align:left">Time</th><th style="padding:4px 8px;border:1px solid #333;text-align:left">Duration</th><th style="padding:4px 8px;border:1px solid #333;text-align:left">Intervened</th></tr></thead>
+                <tbody>${eventsHtml}</tbody>
+              </table>
+            ` : '<p style="color:#6b7280;font-size:12px">No confusion events</p>'}
+          </div>
+        `;
+      }
+
+      const html = `<!DOCTYPE html><html><head><title>ConfuSense Report - ${analytics.meetingId}</title>
+        <style>body{font-family:system-ui,-apple-system,sans-serif;background:#0d0d1a;color:#e5e7eb;padding:40px;max-width:800px;margin:0 auto}h1{color:#fff}h2{color:#a78bfa;border-bottom:1px solid #2d2d44;padding-bottom:8px}table{font-size:13px}@media print{body{background:#fff;color:#111}h2{color:#6366f1}}</style>
+      </head><body>
+        <h1>ConfuSense Session Report</h1>
+        <div style="margin-bottom:24px">
+          <p><b>Meeting ID:</b> ${analytics.meetingId}</p>
+          <p><b>Tutor:</b> ${analytics.tutorName}</p>
+          <p><b>Start Time:</b> ${startTime}</p>
+          <p><b>Duration:</b> ${durationMins} minutes</p>
+          <p><b>Students:</b> ${analytics.students.length}</p>
+        </div>
+        <h2>Student Details</h2>
+        ${studentRows}
+        <script>window.onload=()=>window.print()</script>
+      </body></html>`;
+
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+    }
+  }, [meetingId]);
+
+  return (
+    <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '48px 24px' }}>
+      <Link to="/" style={{ color: '#6366f1', fontSize: '14px', display: 'inline-block', marginBottom: '24px' }}>
+        ← Back to meetings
+      </Link>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
+        <div>
+          <h1 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '4px', fontFamily: 'monospace' }}>
+            {meetingId}
+          </h1>
+          <p style={{ color: '#9ca3af', margin: 0 }}>
+            {students.length} student{students.length !== 1 ? 's' : ''} · auto-refreshes every 5s
+          </p>
+        </div>
