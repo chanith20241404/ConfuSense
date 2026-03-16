@@ -178,3 +178,67 @@ export default function Meeting() {
             {students.length} student{students.length !== 1 ? 's' : ''} · auto-refreshes every 5s
           </p>
         </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={handleDownloadPdf} style={btnStyle}>
+            📊 CSV
+          </button>
+          <button onClick={handleDownloadPdfReport} style={{ ...btnStyle, background: '#6366f1' }}>
+            📄 PDF Report
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div style={{ background: '#7f1d1d', color: '#f87171', padding: '12px 16px', borderRadius: '8px', marginBottom: '24px' }}>
+          {error}
+        </div>
+      )}
+
+      {students.length === 0 && !error ? (
+        <div style={{ color: '#4b5563', textAlign: 'center', padding: '48px' }}>
+          No students in this meeting
+        </div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', background: '#1a1a2e', borderRadius: '10px', overflow: 'hidden' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #2d2d44' }}>
+              <th style={th}>Student</th>
+              <th style={th}>Engagement</th>
+              <th style={th}>History</th>
+              <th style={{ ...th, textAlign: 'center' }}>Confusion %</th>
+              <th style={{ ...th, textAlign: 'center' }}>Interventions</th>
+              <th style={th}>Frames</th>
+              <th style={th}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {students.map((s) => (
+              <StudentRow key={s.uuid} student={s} onIntervene={handleIntervene} onStopIntervention={handleStopIntervention} />
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+const th: React.CSSProperties = {
+  padding: '12px 16px',
+  textAlign: 'left',
+  fontSize: '12px',
+  fontWeight: 600,
+  color: '#9ca3af',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+};
+
+const btnStyle: React.CSSProperties = {
+  padding: '8px 16px',
+  borderRadius: '8px',
+  border: '1px solid #2d2d44',
+  background: '#1a1a2e',
+  color: '#e5e7eb',
+  fontSize: '13px',
+  fontWeight: 600,
+  cursor: 'pointer',
+};
