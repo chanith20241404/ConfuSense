@@ -1,0 +1,20 @@
+services:
+  nats:
+    image: nats:latest
+    command: ["--js", "-m", "8222"]
+    ports:
+      - "4222:4222"
+
+  sqld:
+    image: ghcr.io/tursodatabase/libsql-server:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - sqld_data:/var/lib/sqld
+    environment:
+      SQLD_NODE: primary
+
+  backend:
+    build: ./backend
+    ports:
+      - "3000:3000"
