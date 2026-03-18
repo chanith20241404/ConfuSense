@@ -18,3 +18,20 @@ services:
     build: ./backend
     ports:
       - "3000:3000"
+    env_file: .env
+    depends_on:
+      - nats
+      - sqld
+
+  dashboard:
+    build:
+      context: ./dashboard
+      args:
+        VITE_API_URL: http://localhost:3000
+    ports:
+      - "4000:80"
+
+  # landing service removed — "marketing site/" has no Dockerfile yet
+
+volumes:
+  sqld_data:
