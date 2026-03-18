@@ -128,3 +128,128 @@ export default function Hero() {
             }}>
               <DashboardMockup />
             </div>
+          </div>
+        </div>
+
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24, marginTop: 100,
+        }} className="stats-grid">
+          {[
+            { value: 'Gemini 2.5', label: 'Flash Lite AI Model', icon: '\u26A1' },
+            { value: '< 5s', label: 'Detection Cycle', icon: '\uD83C\uDFAF' },
+            { value: 'PDF + CSV', label: 'Session Reports', icon: '\uD83D\uDCCA' },
+          ].map((s, i) => (
+            <div key={i} style={{
+              textAlign: 'center', padding: '32px 24px', borderRadius: 20,
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.06)',
+              backdropFilter: 'blur(10px)',
+              transition: 'all 0.3s ease',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(102,126,234,0.3)'; e.currentTarget.style.background = 'rgba(102,126,234,0.05)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+            >
+              <div style={{ fontSize: 28, marginBottom: 8 }}>{s.icon}</div>
+              <div style={{
+                fontSize: 26, fontWeight: 800, marginBottom: 4,
+                background: 'linear-gradient(135deg, #667eea, #a78bfa)',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+              }}>{s.value}</div>
+              <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)' }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes pulse-glow { 0%,100%{opacity:1;box-shadow:0 0 12px rgba(102,126,234,0.6)} 50%{opacity:0.6;box-shadow:0 0 4px rgba(102,126,234,0.3)} }
+        @media (max-width: 900px) {
+          .hero-grid { grid-template-columns: 1fr !important; text-align: center; }
+          .hero-grid h1 { font-size: 40px !important; }
+          .stats-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+    </section>
+  );
+}
+
+function DashboardMockup() {
+  return (
+    <div style={{
+      background: 'linear-gradient(180deg, #0d0d1a, #111128)',
+      borderRadius: 20, overflow: 'hidden',
+      boxShadow: '0 20px 60px rgba(0,0,0,0.4), 0 0 40px rgba(102,126,234,0.08)',
+    }}>
+      <div style={{
+        padding: '12px 16px', background: 'rgba(255,255,255,0.03)',
+        display: 'flex', alignItems: 'center', gap: 8,
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+      }}>
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444' }} />
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b' }} />
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#4ade80' }} />
+        <span style={{
+          marginLeft: 16, fontSize: 12, color: 'rgba(255,255,255,0.35)',
+          fontFamily: "'SF Mono', 'Fira Code', monospace", letterSpacing: '0.02em',
+        }}>ConfuSense Dashboard</span>
+      </div>
+      <div style={{ padding: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.9)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            Students Confused
+          </span>
+          <span style={{ fontSize: 11, color: '#4ade80', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 8px rgba(74,222,128,0.5)', animation: 'pulse-glow 2s infinite' }} />
+            Live &middot; 04:32
+          </span>
+        </div>
+        <div style={{
+          fontSize: 40, fontWeight: 900, marginBottom: 24,
+          background: 'linear-gradient(135deg, #ef4444, #f87171)',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+        }}>1 / 3</div>
+        {[
+          { name: 'Alex', confused: true },
+          { name: 'Sarah', confused: false },
+          { name: 'Mike', confused: false },
+        ].map((s, i) => (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 14px', marginBottom: 8, borderRadius: 10,
+            background: s.confused ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.02)',
+            borderLeft: `3px solid ${s.confused ? '#ef4444' : 'transparent'}`,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{
+                width: 8, height: 8, borderRadius: '50%',
+                background: s.confused ? '#ef4444' : '#4ade80',
+                boxShadow: `0 0 8px ${s.confused ? 'rgba(239,68,68,0.4)' : 'rgba(74,222,128,0.3)'}`,
+              }} />
+              <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 500 }}>{s.name}</span>
+            </div>
+            <span style={{
+              fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 6,
+              color: s.confused ? '#ef4444' : '#4ade80',
+              background: s.confused ? 'rgba(239,68,68,0.1)' : 'rgba(74,222,128,0.08)',
+            }}>
+              {s.confused ? 'Confused' : 'Engaged'}
+            </span>
+          </div>
+        ))}
+        <div style={{ marginTop: 18, display: 'flex', gap: 10 }}>
+          <span style={{
+            padding: '8px 18px', borderRadius: 8,
+            background: 'linear-gradient(135deg, #667eea, #764ba2)',
+            color: '#fff', fontSize: 12, fontWeight: 600,
+            boxShadow: '0 0 16px rgba(102,126,234,0.3)',
+          }}>Intervene</span>
+          <span style={{
+            padding: '8px 18px', borderRadius: 8,
+            background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+            color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 600,
+          }}>Export Report</span>
+        </div>
+      </div>
+    </div>
+  );
+}
