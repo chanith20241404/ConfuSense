@@ -2,8 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import { config } from './config.js';
 import { runMigrations } from './db/schema.js';
-import { connectNats } from './queue/publisher.js';
-import { startConsumer } from './queue/consumer.js';
 import { sessionsRouter } from './api/routes/sessions.js';
 import { framesRouter } from './api/routes/frames.js';
 import { notificationsRouter } from './api/routes/notifications.js';
@@ -36,10 +34,6 @@ app.get('/support', (_req, res) => res.send('<h2>ConfuSense Support</h2><p>For i
 async function main(): Promise<void> {
   await runMigrations();
   console.log('[DB] Migrations complete');
-
-  await connectNats();
-  await startConsumer();
-  console.log('[Consumer] Frame processor started');
 
   app.listen(config.PORT, () => {
     console.log(`[Server] Listening on :${config.PORT}`);

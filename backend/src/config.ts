@@ -2,7 +2,6 @@ import { z } from 'zod';
 
 const envSchema = z.object({
   GEMINI_API_KEY: z.string().min(1),
-  NATS_URL: z.string().url().default('nats://localhost:4222'),
   LIBSQL_URL: z.string().default('http://localhost:8080'),
   PORT: z.coerce.number().default(3000),
 });
